@@ -41,3 +41,9 @@ Verified 2026-09-28 after the owner booted the prepared SD card.
 Cloud-init reported `degraded done`, no errors, and one recoverable warning: missing `cc_netplan_nm_patch`. The installed cloud-init package configuration references that module, but the file is absent; `dpkg -V cloud-init` reported no modified package files. Networking and relay provisioning succeeded. The warning remains recorded; cloud-init was not cleaned or rerun, and its configuration was not changed.
 
 Private local evidence: `work/pi-firstboot-verification.json`, `work/pi-control-smoke.jsonl`, and `work/pi-synthetic-video.png`. Next: identify/connect HDMI capture and verify the Ascent UART/SBUS interfaces and loss behavior. Physical control, RF, FC behavior, internet/VPN and end-to-end latency remain unverified.
+
+## Capture connection check — USB device not detected
+
+Later on 2026-09-28, the owner reported powering the VRX and connecting its HDMI output to a capture adapter attached to the Pi. Repeated SSH checks still showed only the external RTL8812AU Wi-Fi adapter, with no capture USB device or UVC video node. A bounded 45-second USB/video udev monitor observed no connection events. No USB enumeration error or undervoltage condition was found. The adapter's model and USB data connection remain unresolved; reconnecting it directly to another Pi USB-A port is the next step. No capture configuration was guessed or enabled; the labelled synthetic stream remains active.
+
+Independently, Pi `h264_v4l2m2m` encoded 90 synthetic 1280×720 frames successfully, and ffprobe decoded/count-verified all 90. This proves the hardware encoder can operate on generated frames, not that the absent capture device works or that sustained capture/encode latency is acceptable. The temporary encoded file was deleted. Check summary: `work/pi-capture-check.json`.
