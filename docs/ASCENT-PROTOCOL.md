@@ -14,6 +14,8 @@ The drawing contains two VRXs and two GT Pro aircraft linked to a single Pi-like
 
 ## What the command document establishes
 
+Manufacturer evidence now explicitly supports the broader control architecture: [Ascent V16.4.4 release notes](https://wiki.caddxfpv.com/zh/Ascent-HD-Series/firmware-release-note) announce SBUS and UART passthrough, subject to hardware support. The [standard VRX manual](https://cdn.shopify.com/s/files/1/0036/3921/4169/files/Ascent_VRX_User_manual_V1.0.pdf?v=1769739026) labels the six-pin port as its passthrough interface. The unknowns below concern this pair's interface details and measured behavior, not whether CADDX advertises the feature. See [DJI, Avatar and Ascent RC transport research](RC-LINK-RESEARCH.md).
+
 The envelope is `FE EF | command | length[2] | payload | checksum[2] | 0D 0A`. Examples encode length and checksum most-significant byte first. The stated checksum sums payload bytes. All supplied sums are below 256; overflow behavior still needs confirmation. The codec implements a 16-bit sum as an explicitly unverified extension beyond those examples.
 
 Command `0x22`, payload family `0x40`, represents buttons. A four-byte payload contains function type, key number, press type and a reserved zero. For example the supplied Confirm packet is `FE EF 22 00 04 40 04 00 00 00 44 0D 0A`. Family `0x50` sets radio band/channel/hopping. Families `0x51` and `0x52` describe frequency and wireless-status reads. None contains a 16-channel RC snapshot, joystick axes, MAVLink encapsulation or SBUS framing.
