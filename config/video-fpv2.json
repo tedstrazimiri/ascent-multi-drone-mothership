@@ -1,0 +1,10 @@
+{
+  "source": "synthetic",
+  "device": "/dev/v4l/by-id/REPLACE_WITH_SECOND_CAPTURE_DEVICE",
+  "input_format": "h264",
+  "size": "1280x720",
+  "fps": 30,
+  "encoder": "libx264",
+  "bitrate": "3M",
+  "url": "rtsp://127.0.0.1:8554/fpv2"
+}

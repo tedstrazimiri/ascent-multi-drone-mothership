@@ -1,0 +1,14 @@
+{
+  "raspios": {
+    "url": "https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-09-15/2026-09-15-raspios-trixie-arm64-lite.img.xz",
+    "sha256": "cdf4f3bfac35ae947b46e4e767f935453810549779ac3290e05a6754aee627e5"
+  },
+  "mediamtx-arm64": {
+    "url": "https://github.com/bluenviron/mediamtx/releases/download/v1.21.1/mediamtx_v1.21.1_linux_arm64.tar.gz",
+    "sha256": "6a3aa635fb60ea9b8d566ec306f0a42ff1b6b52a3942bc2baffbe55880d4c3dd"
+  },
+  "mediamtx-amd64": {
+    "url": "https://github.com/bluenviron/mediamtx/releases/download/v1.21.1/mediamtx_v1.21.1_linux_amd64.tar.gz",
+    "sha256": "653abc672a3e693f8d3b2717752492fdcfb8072291ec108d03d3dd857411b0ee"
+  }
+}

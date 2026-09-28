@@ -1,0 +1,35 @@
+# Local RTSP service. Remote access initially uses an authenticated SSH tunnel.
+logLevel: info
+rtsp: yes
+rtspAddress: 127.0.0.1:8554
+rtspTransports: [tcp]
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+moq: no
+api: no
+metrics: no
+pprof: no
+playback: no
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: [127.0.0.1, '::1']
+    permissions:
+      - action: publish
+        path: fpv1
+      - action: read
+        path: fpv1
+      - action: publish
+        path: fpv2
+      - action: read
+        path: fpv2
+paths:
+  fpv1:
+    source: publisher
+    overridePublisher: no
+  fpv2:
+    source: publisher
+    overridePublisher: no

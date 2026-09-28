@@ -1,0 +1,7 @@
+.cache/
+work/
+dist/
+__pycache__/
+*.pyc
+*.key
+local-*.json

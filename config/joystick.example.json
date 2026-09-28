@@ -1,0 +1,10 @@
+{
+  "note": "EXAMPLE ONLY: inspect axes/buttons, then calibrate. AETR here is not a verified radio mapping. AUX channels stay low in this bench prototype.",
+  "axes": [
+    {"index": 0, "min": -32767, "max": 32767, "invert": false},
+    {"index": 1, "min": -32767, "max": 32767, "invert": false},
+    {"index": 2, "min": -32767, "max": 32767, "invert": false},
+    {"index": 3, "min": -32767, "max": 32767, "invert": false}
+  ],
+  "deadman_button": 0
+}

@@ -1,0 +1,20 @@
+[Unit]
+Description=Ascent video publisher %i
+Requires=ascent-mediamtx.service
+After=ascent-mediamtx.service
+
+[Service]
+User=ascent-relay
+Group=ascent-relay
+SupplementaryGroups=video
+WorkingDirectory=/opt/ascent-relay
+ExecStart=/usr/bin/python3 -m relay.video /etc/ascent-relay/video-%i.json --run
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

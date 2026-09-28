@@ -1,0 +1,17 @@
+[Unit]
+Description=Ascent bench RTSP server on loopback
+After=network.target
+
+[Service]
+User=ascent-relay
+Group=ascent-relay
+ExecStart=/opt/ascent-relay/bin/mediamtx /etc/ascent-relay/mediamtx.yml
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
