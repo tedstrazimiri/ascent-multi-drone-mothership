@@ -21,6 +21,6 @@ Not yet verified: actual HDMI capture, UVC, Pi encoder throughput, physical UART
 - All shell scripts passed bash syntax checks; Python source compiled. Host systemd verification can only inspect syntax because Pi-specific executable paths are absent on the laptop; actual service startup remains a Pi first-boot check.
 - User authorized replacing the inserted Pi SD card. Its SD identity and capacity were checked separately from the NVMe system disk; the write plan is private and rechecks both immediately before writing.
 
-Physical SD write/readback and first boot status: the prepared writer is waiting for local Ubuntu administrator authentication; no SD write has started yet.
+Physical SD write and full readback PASSED. Ubuntu administrator authentication was completed locally. Exactly 3,061,841,920 bytes were written and read back with SHA-256 `f03490dc0a08d500cf79a1d439d7bbbcfcd31802849d6e56b00a3ed6e76e6f58`. Both card partitions were unmounted after completion. The SD is ready to move into the Pi. Physical first boot, SSH and service startup remain pending.
 
 Write guard checks passed against the actual plan: the NVMe target, an incorrect SD identity and a changed capacity were all rejected before any write.
