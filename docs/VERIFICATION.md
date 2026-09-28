@@ -1,6 +1,6 @@
 # Verification record
 
-2026-09-28 software preparation in progress.
+2026-09-28 initial software preparation. Physical first-boot results are recorded below.
 
 - 13 unit tests passed: command examples, SBUS packing boundaries, invalid channel rejection, authenticated-message tamper rejection, stale/replayed/reordered control rejection, source ownership, deadman and timeout latching.
 - Localhost control smoke test passed: 50 accepted synthetic snapshots and loss latch after sender stopped.
@@ -24,3 +24,20 @@ Not yet verified: actual HDMI capture, UVC, Pi encoder throughput, physical UART
 Physical SD write and full readback PASSED. Ubuntu administrator authentication was completed locally. Exactly 3,061,841,920 bytes were written and read back with SHA-256 `f03490dc0a08d500cf79a1d439d7bbbcfcd31802849d6e56b00a3ed6e76e6f58`. Both card partitions were unmounted after completion. The SD is ready to move into the Pi. Physical first boot, SSH and service startup remain pending.
 
 Write guard checks passed against the actual plan: the NVMe target, an incorrect SD identity and a changed capacity were all rejected before any write.
+
+## Physical Pi first boot and LAN checks — passed
+
+Verified 2026-09-28 after the owner booted the prepared SD card.
+
+- `ascent-pi` resolves and connects through its existing strict, pinned SSH host key. The observed address is `192.168.1.104`, reached through onboard `wlan0`; Ethernet and the USB Wi-Fi adapter were not used by this test. Effective SSH configuration enables public keys and disables password/root login.
+- Device reports Raspberry Pi 4 Model B Rev 1.2, 2 GB configured RAM, aarch64. This identifies the running board but does not resolve its membership in the inventory's original two-Pi batch.
+- Unattended `ascent-firstboot` exited successfully and wrote the provisioning marker at `2026-09-28T21:58:45Z`. `dpkg --audit` was empty. MediaMTX and `ascent-video@fpv1` were enabled and running with zero restarts; no systemd services were failed.
+- Startup publishes labelled synthetic H.264 at 1280×720, 30 fps. The laptop opened a temporary authenticated SSH RTSP tunnel, decoded 90 frames and saved a frame showing the synthetic label. This confirms Pi-to-laptop transport, not VRX HDMI capture.
+- During the video test, the laptop sent 239 authenticated synthetic channel snapshots over LAN UDP; the Pi JSON-only receiver accepted all 239. Its watchdog latched loss after sender shutdown. No UART/GPIO was opened or driven. The temporary receiver, SSH tunnel and temporary key were removed afterward.
+- Pi temperature after the tests was 42.8 °C and `get_throttled` returned `0x0`. This short test is not a thermal or sustained-throughput qualification.
+- UART is enabled and `/dev/serial0` currently resolves to `ttyS0`; the kernel command line has no serial console. No GPIO electrical compatibility or SBUS timing was tested.
+- USB enumeration found the attached RTL8812AU Wi-Fi adapter but no UVC capture device. Listed V4L2 devices were onboard codec/ISP devices; their existence is not a camera feed or an encoder-throughput test.
+
+Cloud-init reported `degraded done`, no errors, and one recoverable warning: missing `cc_netplan_nm_patch`. The installed cloud-init package configuration references that module, but the file is absent; `dpkg -V cloud-init` reported no modified package files. Networking and relay provisioning succeeded. The warning remains recorded; cloud-init was not cleaned or rerun, and its configuration was not changed.
+
+Private local evidence: `work/pi-firstboot-verification.json`, `work/pi-control-smoke.jsonl`, and `work/pi-synthetic-video.png`. Next: identify/connect HDMI capture and verify the Ascent UART/SBUS interfaces and loss behavior. Physical control, RF, FC behavior, internet/VPN and end-to-end latency remain unverified.

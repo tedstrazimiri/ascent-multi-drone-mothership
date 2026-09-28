@@ -8,6 +8,8 @@ From this laptop use `ssh ascent-pi` after `ascent-relay.local` appears. Check `
 
 The startup stream is labelled SYNTHETIC BENCH VIDEO. It proves a transport path, not VRX reception. No RC output starts automatically.
 
+First boot passed on 2026-09-28: `ssh ascent-pi` works, observed Wi-Fi address `192.168.1.104`, packages installed and synthetic video starts automatically. Laptop video decode and JSON-only LAN control/loss tests passed. DHCP addresses can change; prefer the SSH alias. See [verification details](VERIFICATION.md).
+
 ## HDMI capture
 
 Connect VRX HDMI OUT to an HDMI-to-USB capture adapter and its USB output to a Pi USB 3 socket. Use the VRX's correctly rated independent supply. The Pi HDMI sockets are unused inputs because they cannot receive video. Read labels and HDMI orientation before connecting.

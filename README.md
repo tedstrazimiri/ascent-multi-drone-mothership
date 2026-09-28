@@ -2,6 +2,8 @@
 
 Prototype one ground-piloted FPV carried by a mothership, then expand to two independent links. Focus: video, RC control and telemetry transport. Launch mechanics and suppression payloads are outside this implementation.
 
+**Bench status, 2026-09-28:** the prepared Pi has booted, `ssh ascent-pi` works, and automatic synthetic video plus laptop↔Pi software control tests passed. Actual Ascent video capture and physical RC output remain to be tested. See [verification](docs/VERIFICATION.md).
+
 **Current design:** Ascent VRX HDMI → USB capture → Raspberry Pi 4B → Ethernet/router → private IP network → laptop. In the other direction, USB HID radio → laptop channel mapper → authenticated control transport → Pi → hardware SBUS interface → VRX → GT Pro → FPV flight controller. The final electrical/control interface remains to be verified on the bench.
 
 ```mermaid
