@@ -47,3 +47,16 @@ Private local evidence: `work/pi-firstboot-verification.json`, `work/pi-control-
 Later on 2026-09-28, the owner reported powering the VRX and connecting its HDMI output to a capture adapter attached to the Pi. Repeated SSH checks still showed only the external RTL8812AU Wi-Fi adapter, with no capture USB device or UVC video node. A bounded 45-second USB/video udev monitor observed no connection events. No USB enumeration error or undervoltage condition was found. The adapter's model and USB data connection remain unresolved; reconnecting it directly to another Pi USB-A port is the next step. No capture configuration was guessed or enabled; the labelled synthetic stream remains active.
 
 Independently, Pi `h264_v4l2m2m` encoded 90 synthetic 1280×720 frames successfully, and ffprobe decoded/count-verified all 90. This proves the hardware encoder can operate on generated frames, not that the absent capture device works or that sustained capture/encode latency is acceptable. The temporary encoded file was deleted. Check summary: `work/pi-capture-check.json`.
+
+## USB capture and VRX HDMI through RTSP — passed; FPV trial paused
+
+After the owner changed the USB cable, the capture adapter enumerated as `534d:2109`, manufacturer string `MACROSILICON`, product `USB Video`, without a serial number. It operates through `uvcvideo` at USB 2.0 high speed (480 Mbit/s). The video node is `/dev/video0` with stable single-adapter alias `/dev/v4l/by-id/usb-MACROSILICON_USB_Video-video-index0`; `/dev/video1` is metadata. Retail brand/model remain unknown.
+
+- Advertised formats are MJPEG and YUYV, not H.264. Selected MJPEG 1280×720 at 30 fps. Higher advertised modes were not tested and do not establish unique camera-frame rates.
+- Direct capture → hardware H.264 test encoded 90 frames in approximately 3.63 seconds including startup; ffprobe decoded/count-verified all 90. This is a functionality check, not a glass-to-glass latency measurement.
+- Saved the prior Pi video configuration, installed `config/video-macrosilicon-720p30.json` as `/etc/ascent-relay/video-fpv1.json`, and restarted the already enabled publisher. It remained running with zero automatic restarts. MediaMTX reported its H.264 stream online.
+- Pi-side RTSP inspection reported H.264, 1280×720, 30 fps. Laptop RTSP through a temporary authenticated SSH tunnel decoded 90 frames. An initial attempt encountered transient hostname/network access trouble; the successful retry used the known Pi IP with the existing pinned host key. The temporary tunnel was closed afterward.
+- First direct capture showed plain colour bars. The later RTSP frame visibly showed the CADDX VRX interface, 0 Mbps, No Sig, and “Transmitter is disconnected.” This proves VRX HDMI → capture USB → Pi encoding → RTSP → laptop. It does not prove a VTX camera link, usable FPV latency, or RC transport. The cause of the HDMI picture transition was not independently established.
+- Temperature was 43.3 °C, with no throttling recorded during the check. No UART/GPIO control output was enabled.
+
+Evidence: `work/vrx-capture-first.jpg`, `work/vrx-capture-rtsp.jpg`, and `work/pi-capture-rtsp-verification.json`. The owner requested a pause to prepare an FPV. Capture configuration remains saved and its enabled service remains running; the next test is the GT Pro camera link when the owner resumes.

@@ -1,0 +1,10 @@
+{
+  "source": "v4l2",
+  "device": "/dev/v4l/by-id/usb-MACROSILICON_USB_Video-video-index0",
+  "input_format": "mjpeg",
+  "size": "1280x720",
+  "fps": 30,
+  "encoder": "h264_v4l2m2m",
+  "bitrate": "3M",
+  "url": "rtsp://127.0.0.1:8554/fpv1"
+}

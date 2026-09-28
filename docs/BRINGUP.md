@@ -12,6 +12,14 @@ First boot passed on 2026-09-28: `ssh ascent-pi` works, observed Wi-Fi address `
 
 ## HDMI capture
 
+**Current saved configuration (2026-09-28):** the running Pi now uses the MacroSilicon USB capture adapter (`534d:2109`) at `/dev/v4l/by-id/usb-MACROSILICON_USB_Video-video-index0`, MJPEG 1280×720 at 30 fps, and `h264_v4l2m2m` at a requested 3 Mbit/s. The reusable profile is [video-macrosilicon-720p30.json](../config/video-macrosilicon-720p30.json); it has been applied to `/etc/ascent-relay/video-fpv1.json`. The previous synthetic configuration remains backed up as `/etc/ascent-relay/video-fpv1.json.before-hdmi-20260928T225427Z`. Generic image defaults remain synthetic.
+
+The laptop received the CADDX VRX interface through RTSP. It reported “Transmitter is disconnected”; a VTX camera feed has not yet been tested. Work is paused while the owner prepares an FPV. Resume by checking the camera/VTX link, then joystick mapping and the independent SBUS bench tests below. No physical RC output is enabled.
+
+Changing the USB cable resolved capture enumeration. Initial capture frames were plain colour bars; later frames showed the VRX interface. If colour bars recur, check HDMI input/output connections and the receiver's HDMI mode. The standard Ascent VRX manual specifies holding **BACK for 8 seconds** to restore 720p60 HDMI output. This changes HDMI timing; it is not the LINK/firmware-upgrade action. [Manufacturer manual](https://cdn.shopify.com/s/files/1/0036/3921/4169/files/Ascent_VRX_User_manual_V1.0.pdf?v=1769739026).
+
+This adapter has no USB serial number. With a second identical adapter, use verified `/dev/v4l/by-path` connections to prevent ambiguous identities. `/dev/video1` on this adapter is its metadata node, not the capture stream.
+
 Connect VRX HDMI OUT to an HDMI-to-USB capture adapter and its USB output to a Pi USB 3 socket. Use the VRX's correctly rated independent supply. The Pi HDMI sockets are unused inputs because they cannot receive video. Read labels and HDMI orientation before connecting.
 
 Run `bash scripts/probe.sh` in this checkout, or use `v4l2-ctl --list-devices` and `v4l2-ctl -d /dev/v4l/by-id/ACTUAL_DEVICE --list-formats-ext` remotely. Record the actual stable path, input formats, mode and framerate. Replace the placeholder in `/etc/ascent-relay/video-fpv1.json`, set `source` to `v4l2`, and select a supported mode. `encoder: copy` is only allowed with `input_format: h264`. For MJPEG/YUYV select a tested encoder. Restart `ascent-video@fpv1` after editing.
