@@ -40,7 +40,7 @@ This viewer command is an initial buffer-reduction setting, not a latency guaran
 
 ## USB HID and software control
 
-Current radio: owner identifies a RadioMaster GX15; USB reports `OpenTX TX15 Joystick`, 8 axes and 24 buttons. Raw input reaches the Pi through a read-only SSH diagnostic, but no stick movement/direction or deadman mapping has been verified. Select the observed `...TX15_Joystick...-joystick` symlink on this laptop, not its `event-joystick` node. The connected USB FC reports Betaflight 4.5.1 / `GEPRC_TAKER_H743`, currently CRSF on UART7; its settings were only read. Confirm the actual VTX output and wiring before changing receiver settings.
+Current radio: owner identifies a RadioMaster GX15; USB reports `OpenTX TX15 Joystick`, 8 axes and 24 buttons. Raw input reaches the Pi through a read-only SSH diagnostic, but no stick movement/direction or deadman mapping has been verified. Select the observed `...TX15_Joystick...-joystick` symlink on this laptop, not its `event-joystick` node. The connected USB FC reports Betaflight 4.5.1 / `GEPRC_TAKER_H743`. Owner confirms the GT Pro six-pin cable goes to its digital-VTX connector. Latest readback shows UART1 MSP + DisplayPort and UART2 Serial RX enabled, with SBUS stored, but Receiver Mode still set to MSP. For SBUS on RX2, change Receiver Mode to Serial (via UART). See [verified manual mapping and remaining interface gap](FC-WIRING.md).
 
 Read the radio in joystick mode on the laptop. Find `/dev/input/by-id/*-joystick` (not `event-joystick`) and inspect it:
 
@@ -104,4 +104,4 @@ Check the VRX menu for `Ascent VRX-Uart` and its `Command`/`ELRS pass-through` o
 5. Deliberately stop the sender, unplug HID, remove IP, stop Pi software, reset/power-cycle Pi, disconnect VRX input, and interrupt the Ascent RF link. Observe what arrives at the FC and whether its actual failsafe activates. No stage may indefinitely repeat a last valid armed value.
 6. Measure stick-to-FC latency and stale video behavior. Only then test WAN impairment and plan field evaluation. A successful software SBUS frame or menu query does not establish radio transport or FC loss behavior.
 
-Still needed: physical stick/deadman mapping, confirmation of the USB-observed FC and its VTX wiring, VRX/GT Pro running firmware and passthrough settings, UART voltage, capture retail model and the output interface appropriate to the chosen protocol.
+Still needed: physical stick/deadman mapping, confirmation of the Receiver Mode correction, actual Ascent RC transport, VRX/GT Pro running firmware and passthrough settings, UART voltage, capture retail model and the output interface appropriate to the chosen protocol. The owner-confirmed FC/harness association and manual mapping are recorded in [FC-WIRING.md](FC-WIRING.md).
