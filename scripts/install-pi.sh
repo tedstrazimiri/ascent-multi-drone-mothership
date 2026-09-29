@@ -27,6 +27,7 @@ install -d -m 755 "$target" "$target/bin" "$target/scripts" /etc/ascent-relay
 touch "$target/.managed-by-ascent-relay"
 cp -r "$root/relay" "$target/"
 install -m 755 "$root/scripts/probe.sh" "$target/scripts/probe.sh"
+install -m 755 "$root/scripts/configure-uart.sh" "$target/scripts/configure-uart.sh"
 find "$target/relay" -type d -name __pycache__ -exec rm -r -- {} +
 tar -xzf "$archive" -C "$target/bin" mediamtx LICENSE
 chmod 755 "$target/bin/mediamtx"
@@ -43,5 +44,6 @@ for source_file in "$root"/systemd/*.service; do
   install -m 644 "$source_file" "$dest"
 done
 systemctl daemon-reload
-echo 'Installed. Existing configuration preserved. No services enabled, restarted, or started.'
+bash "$target/scripts/configure-uart.sh"
+echo 'Installed. Existing video configuration preserved; video services not started or restarted.'
 echo 'Read docs/BRINGUP.md; default video sources are SYNTHETIC.'

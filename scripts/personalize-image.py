@@ -87,12 +87,14 @@ def main():
     subprocess.run([mcopy, '-i', fat, '::/cmdline.txt', str(work/'cmdline.txt')], check=True)
     cmdline = (work/'cmdline.txt').read_text().strip().split()
     cmdline = [x for x in cmdline if not (x.startswith('console=serial') or x.startswith('console=ttyAMA')
+                                        or x.startswith('console=ttyS') or x.startswith('earlycon')
                                         or x.startswith('ds=nocloud') or x.startswith('cfg80211.ieee80211_regdom='))]
     cmdline += ['ds=nocloud;i='+instance, 'cfg80211.ieee80211_regdom=CA']
     (work/'cmdline.txt').write_text(' '.join(cmdline)+'\n')
     subprocess.run([mcopy, '-i', fat, '::/config.txt', str(work/'config.txt')], check=True)
     with (work/'config.txt').open('a') as f:
-        f.write('\n[all]\n# Ascent relay: hardware UART, no serial console\nenable_uart=1\n')
+        f.write('\n# Ascent PL011 UART begin\n[all]\nenable_uart=1\n'
+                'dtoverlay=disable-bt\n# Ascent PL011 UART end\n')
     for name in ('user-data','meta-data','network-config','cmdline.txt','config.txt'):
         subprocess.run([mcopy, '-o', '-i', fat, str(work/name), '::/'+name], check=True)
         readback = work/('readback-'+name)

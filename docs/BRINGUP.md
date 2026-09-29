@@ -14,7 +14,7 @@ First boot passed on 2026-09-28: `ssh ascent-pi` works, observed Wi-Fi address `
 
 **Current saved configuration (2026-09-28):** the running Pi now uses the MacroSilicon USB capture adapter (`534d:2109`) at `/dev/v4l/by-id/usb-MACROSILICON_USB_Video-video-index0`, MJPEG 1280×720 at 30 fps, and `h264_v4l2m2m` at a requested 3 Mbit/s. The reusable profile is [video-macrosilicon-720p30.json](../config/video-macrosilicon-720p30.json); it has been applied to `/etc/ascent-relay/video-fpv1.json`. The previous synthetic configuration remains backed up as `/etc/ascent-relay/video-fpv1.json.before-hdmi-20260928T225427Z`. Generic image defaults remain synthetic.
 
-The laptop received the CADDX VRX interface through RTSP. It reported “Transmitter is disconnected”; a VTX camera feed has not yet been tested. Work is paused while the owner prepares an FPV. Resume by checking the camera/VTX link, then joystick mapping and the independent SBUS bench tests below. No physical RC output is enabled.
+The laptop received the CADDX VRX interface through RTSP. It reported “Transmitter is disconnected”; a VTX camera feed has not yet been tested. The owner has resumed preparation for GPIO/HID tests while finishing the FPV. Next: verify signal levels, inspect the radio in USB joystick mode, and confirm the VRX passthrough mode. No physical RC output is enabled.
 
 Changing the USB cable resolved capture enumeration. Initial capture frames were plain colour bars; later frames showed the VRX interface. If colour bars recur, check HDMI input/output connections and the receiver's HDMI mode. The standard Ascent VRX manual specifies holding **BACK for 8 seconds** to restore 720p60 HDMI output. This changes HDMI timing; it is not the LINK/firmware-upgrade action. [Manufacturer manual](https://cdn.shopify.com/s/files/1/0036/3921/4169/files/Ascent_VRX_User_manual_V1.0.pdf?v=1769739026).
 
@@ -69,6 +69,31 @@ For laptop→Pi bench testing, copy that key privately with `scp`, place the che
 ## Electrical and end-to-end control validation
 
 Leave props and suppression payloads off for these tests. This is needed to observe channel values and deliberate disconnects without actuation hazards.
+
+### Pi UART preparation and wiring
+
+`sudo bash /opt/ascent-relay/scripts/configure-uart.sh` configures the Pi 4's full PL011 UART on GPIO14/15, disables onboard Bluetooth and serial gettys, and backs up changed boot files. Reboot to apply. The mini UART previously exposed as `ttyS0` cannot provide parity, so it is unsuitable for standard SBUS 8E2. PL011 still requires the correct external polarity/voltage interface for SBUS. This setup never opens the port or transmits RC frames. [Raspberry Pi UART documentation](https://www.raspberrypi.com/documentation/computers/configuration.html#configuring-uarts).
+
+Verify `/dev/serial0` resolves to `ttyAMA0`, `pinctrl get 14-15` reports TXD0/RXD0, and no serial console/getty owns the port. The reusable image and installer now apply this same configuration. The already flashed image file has not been rebuilt.
+
+Before signal wiring, measure the separately powered VRX TX relative to G with the Pi disconnected: meter in DC-voltage mode, black probe on G, red on TX. A 5 V reading rules out direct GPIO wiring; 0 V or an intermediate reading does not establish normal UART signalling. An idle reading near 3.3 V is useful evidence, but a meter does not prove peak voltage, baud rate, inversion or the RX input specification. Record the actual result and resolve uncertain levels with revision-matched specifications or a scope/appropriate interface.
+
+For a confirmed 3.3 V UART, shut the Pi down cleanly, then remove power from both devices before fitting jumpers. Follow the harness labels, not an assumed connector orientation:
+
+| VRX harness label | Pi 40-pin header | Direction / purpose |
+|---|---|---|
+| G | Physical pin 6, GND | Common reference |
+| RX | Physical pin 8, GPIO14/TXD0 | Pi → VRX |
+| TX | Physical pin 10, GPIO15/RXD0 | VRX → Pi |
+| 5V | Unconnected and insulated | Keep supplies separate |
+| SBUS | Unconnected for the UART test | Separate signalling/interface |
+| Second G | Unconnected | One common ground lead is sufficient |
+
+Physical pin numbers differ from GPIO numbers. Identify pin 1 from the board marking before counting. GPIO14 and GPIO15 are **physical pins 8 and 10**, not physical pins 14 and 15. Never feed 5 V into a Pi signal pin.
+
+Check the VRX menu for `Ascent VRX-Uart` and its `Command`/`ELRS pass-through` options. Record running firmware and the options actually present. The supplied firmware notes describe these options, but do not establish this unit's UART baud/framing or that ELRS mode converts UART channels to the GT Pro's SBUS output. Do not select a guessed baud or send the supplied management packets as stick commands. `relay.bench` remains a JSON/SBUS-hex receiver until the physical protocol is established.
+
+### Link checks
 
 1. Confirm exact VRX/GT Pro firmware and connector direction/voltage. The owner-labelled `SBUS, 5V, RX, TX, G, G` list is not a pin-numbered mating-face diagram.
 2. If UART signals are documented/measured as Pi-compatible, connect only crossed TX/RX and common ground. Leave 5 V unconnected. Disable the Pi serial console before opening the UART. Use Command mode only for verified management exchanges; do not route stick channels through the supplied menu packet format.

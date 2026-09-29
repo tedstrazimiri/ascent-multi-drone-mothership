@@ -60,3 +60,15 @@ After the owner changed the USB cable, the capture adapter enumerated as `534d:2
 - Temperature was 43.3 °C, with no throttling recorded during the check. No UART/GPIO control output was enabled.
 
 Evidence: `work/vrx-capture-first.jpg`, `work/vrx-capture-rtsp.jpg`, and `work/pi-capture-rtsp-verification.json`. The owner requested a pause to prepare an FPV. Capture configuration remains saved and its enabled service remains running; the next test is the GT Pro camera link when the owner resumes.
+
+## GPIO/HID preparation resumed — Pi UART prepared
+
+The owner resumed wiring preparation while finishing the FPV. The live Pi initially exposed `/dev/serial0 -> ttyS0`, with no serial console/getty and no process using the UART. The mini UART does not support parity; switched GPIO14/15 to PL011 using the official `disable-bt` overlay. Added `scripts/configure-uart.sh` and updated the repeatable installer/image personalizer. The existing staged image was not rebuilt or reflashed.
+
+- Applied the helper to the Pi, preserving the previous boot configuration in a timestamped backup; reboot completed and strict pinned SSH access returned.
+- `/dev/serial0 -> ttyAMA0`; `pinctrl get 14-15` reports GPIO14 TXD0 and GPIO15 RXD0. Serial getty and hciuart are inactive, and no process owns `ttyAMA0`. Onboard Bluetooth is disabled; Wi-Fi access remains operational.
+- Re-running the helper left both boot configuration file hashes unchanged. Shell syntax, Python compilation and Git whitespace checks passed.
+- Both video services returned active after reboot. Pi-side RTSP probe reports H.264 1280×720. No new VTX camera image or latency measurement was taken.
+- Laptop input enumeration still shows no USB joystick. VRX voltage measurement, running firmware/menu options, RC model and FPV FC/firmware have been requested. No VRX signal wire connection, physical serial frame transmission, or FC channel movement has been verified.
+
+Private check summary: `work/pi-uart-preparation.json`. Next: obtain VRX signal levels and USB joystick detection, fit the conditional UART wiring in `docs/BRINGUP.md`, and establish the actual passthrough protocol before enabling physical output.

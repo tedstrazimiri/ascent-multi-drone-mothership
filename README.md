@@ -2,7 +2,7 @@
 
 Prototype one ground-piloted FPV carried by a mothership, then expand to two independent links. Focus: video, RC control and telemetry transport. Launch mechanics and suppression payloads are outside this implementation.
 
-**Bench status, 2026-09-28:** Pi boot/SSH and laptop↔Pi software control tests passed. VRX HDMI → USB capture → Pi hardware H.264 → RTSP → laptop now displays the CADDX receiver interface. The VRX reports its transmitter disconnected; the FPV camera link and physical RC output remain untested. Paused at the owner's request while they prepare an FPV. See [verification](docs/VERIFICATION.md).
+**Bench status, 2026-09-28:** Pi boot/SSH and laptop↔Pi software control tests passed. VRX HDMI → USB capture → Pi hardware H.264 → RTSP → laptop displays the CADDX receiver interface; the last observed picture reported its transmitter disconnected. The owner has resumed GPIO/HID preparation while finishing the FPV. The FPV camera link and physical RC output remain untested; UART voltage and passthrough framing still need confirmation. See [wiring and bring-up](docs/BRINGUP.md) and [verification](docs/VERIFICATION.md).
 
 **Current design:** Ascent VRX HDMI → USB capture → Raspberry Pi 4B → Ethernet/router → private IP network → laptop. In the other direction, USB HID radio → laptop channel mapper → authenticated control transport → Pi → hardware SBUS interface → VRX → GT Pro → FPV flight controller. The final electrical/control interface remains to be verified on the bench.
 

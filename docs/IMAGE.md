@@ -6,6 +6,8 @@ The image builder retains the stock Linux root filesystem and stages a relay bun
 
 The prepared card includes ARM64 dependencies resolved against the stock image and downloaded from signed Debian/Raspberry Pi repositories, so first boot can install them offline. Provisioning retries after failure. No local Pi screen/keyboard setup should be required, but this must be verified on the physical first boot. The image's UART is enabled with the serial login console disabled. No UART process opens automatically.
 
+The current builder and installer select the full PL011 UART on physical pins 8/10 using `dtoverlay=disable-bt`; onboard Bluetooth is disabled. This was also applied to the running Pi and verified after reboot. The older staged `.img` has not been rebuilt with this change. To repeat the update on that image after boot, run `sudo bash scripts/configure-uart.sh` from the current checkout, then reboot. Changed boot files are backed up; see [bench wiring](BRINGUP.md#pi-uart-preparation-and-wiring).
+
 ## Build steps
 
 ```bash
