@@ -3,11 +3,37 @@ import threading
 import time
 from types import SimpleNamespace
 import unittest
-from relay.arm_test import ArmGate, OFF, ON, DRONE, receive, validate_arm_channels
+from relay.arm_test import ArmGate, SwitchIntent, OFF, ON, DRONE, receive, validate_arm_channels
 from relay.protocol import decode, encode
 
 
 class ArmingInterlocks(unittest.TestCase):
+    def test_high_on_start_waits_for_a_new_deliberate_switch_cycle(self):
+        intent = SwitchIntent()
+        for when in (0, 1, 5):
+            self.assertEqual(intent.sample(172, True, when), OFF)
+        self.assertEqual(intent.sample(172, False, 6), OFF)
+        self.assertEqual(intent.sample(172, False, 7.1), OFF)
+        self.assertEqual(intent.phase, 'ready')
+        self.assertEqual(intent.sample(172, True, 7.2), ON)
+
+    def test_early_high_does_not_require_restart_or_arm_when_timer_expires(self):
+        intent = SwitchIntent()
+        self.assertEqual(intent.sample(172, False, 0), OFF)
+        self.assertEqual(intent.sample(172, True, .3), OFF)
+        self.assertEqual(intent.sample(172, True, 3), OFF)
+        self.assertEqual(intent.sample(172, False, 4), OFF)
+        self.assertEqual(intent.sample(172, False, 5.1), OFF)
+        self.assertEqual(intent.sample(172, True, 5.2), ON)
+
+    def test_throttle_movement_disarms_and_never_rearms(self):
+        intent = SwitchIntent()
+        intent.sample(172, False, 0)
+        self.assertEqual(intent.sample(172, True, 1.1), ON)
+        self.assertEqual(intent.sample(500, True, 1.2), OFF)
+        self.assertTrue(intent.finished)
+        self.assertEqual(intent.sample(172, True, 1.3), OFF)
+
     def test_only_arm_can_change_and_throttle_never_moves(self):
         validate_arm_channels(OFF)
         validate_arm_channels(ON)

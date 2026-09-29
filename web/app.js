@@ -1,163 +1,211 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let state = null, hydrated = false, currentPage = 'controller', videoOpen = false, videoURL = '', noticeTimer;
-const pageCopy = {
- controller: ['Make it feel familiar.', 'Your TX15, connected. Every movement, visible.'],
- calibration: ['A little setup. Total clarity.', 'One control at a time. No countdown to miss.'],
- connections: ['Bring the link together.', 'Radio, relay, video and flight controller in one place.'],
- bench: ['Your session. Your timing.', 'Start when you’re ready. Watch the flight controller respond.']
-};
+let state = null, hydrated = false, currentPage = 'live', mode = 'arming';
+let videoEnabled = true, videoURL = '', noticeTimer, disconnected = false, pending = false;
+let renderedLogs = '', renderedMapping = '', primaryActionsVisible = true;
+function updateGlobalStop() {$('global-stop').hidden = !state?.session.active || (currentPage === 'live' && primaryActionsVisible);}
+new IntersectionObserver(([entry]) => {primaryActionsVisible = entry.isIntersecting && entry.intersectionRatio > .8;updateGlobalStop();},{threshold:[0,.8,1]}).observe(document.querySelector('.test-actions'));
+const channelNames = ['ROLL','PITCH','THR','YAW'];
+const setText = (id, text) => {if ($(id).textContent !== String(text)) $(id).textContent = text;};
 function notice(text, error = false) {
- clearTimeout(noticeTimer); $('notice').textContent = text; $('notice').hidden = false;
+ clearTimeout(noticeTimer); setText('notice-text', text); $('notice').hidden = false;
  $('notice').classList.toggle('error', error);
- noticeTimer = setTimeout(() => {$('notice').hidden = true;}, error ? 12000 : 6000);
+ noticeTimer = setTimeout(() => {$('notice').hidden = true;}, error ? 15000 : 5000);
 }
+$('dismiss-notice').onclick = () => {$('notice').hidden = true;};
 async function api(action, data = {}) {
- if (!state) throw Error('Console is still connecting');
- const response = await fetch('/api/' + action, {method:'POST', headers:{'Content-Type':'application/json','X-Console-Token':state.token},body:JSON.stringify(data)});
- const result = await response.json(); if (!response.ok) throw Error(result.error || 'Operation failed'); return result;
+ if (!state) throw Error('Console connecting');
+ const response = await fetch('/api/' + action, {method:'POST', headers:{'Content-Type':'application/json','X-Console-Token':state.token},body:JSON.stringify(data),signal:AbortSignal.timeout(8000)});
+ const result = await response.json();
+ if (!response.ok) throw Error(result.error || 'Operation failed');
+ return result;
 }
-function perform(fn) {return async () => {try {await fn();} catch(error) {notice(error.message, true);}};}
-function page(name) {
- currentPage = name; document.querySelectorAll('.page').forEach(p => p.classList.toggle('active',p.id === 'page-' + name));
- document.querySelectorAll('.nav').forEach(p => p.classList.toggle('active',p.dataset.page === name));
- $('page-title').textContent = pageCopy[name][0]; $('page-description').textContent = pageCopy[name][1];
- if (name !== 'bench' && videoOpen) toggleVideo(false);
- window.scrollTo({top:0,behavior:'smooth'});
+function perform(fn) {return async () => {
+ if (pending) return;
+ pending = true; if (state) render(state);
+ try {await fn();} catch(error) {notice(error.message, true);}
+ finally {pending = false; if (state) render(state);}
+};}
+function page(name, updateHash = true) {
+ if (name === 'arming' || name === 'bench') {mode = name === 'arming' ? 'arming' : 'joystick'; name = 'live';}
+ if (!['live','controller','calibration','connections'].includes(name)) name = 'live';
+ currentPage = name;
+ document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + name));
+ document.querySelectorAll('[data-page]').forEach(p => {p.classList.toggle('active', p.dataset.page === name); p.setAttribute('aria-current', p.dataset.page === name ? 'page' : 'false');});
+ if (name !== 'live') document.body.classList.remove('expanded');
+ $('expand-video').setAttribute('aria-pressed', String(document.body.classList.contains('expanded')));
+ if (updateHash && location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+ if (state) render(state);
+ window.scrollTo({top:0});
 }
-document.querySelectorAll('[data-page]').forEach(b => b.addEventListener('click',() => page(b.dataset.page)));
-document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click',() => page(b.dataset.go)));
-const channelNames = ['Roll','Pitch','Throttle','Yaw'];
+document.querySelectorAll('[data-page]').forEach(b => b.onclick = () => page(b.dataset.page));
+document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => page(b.dataset.go));
+window.addEventListener('hashchange', () => page(location.hash.slice(1), false));
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {if (!state?.session.active) {mode=b.dataset.mode; if(state) render(state);}});
 function makeBar(name, id) {
  const row = document.createElement('div'); row.className = 'channel-row';
  row.innerHTML = `<div class="labels"><span>${name}</span><b id="${id}-value">—</b></div><div class="bar-track"><div class="bar-fill" id="${id}-fill"></div><i class="bar-marker" id="${id}-marker"></i></div>`;
  return row;
 }
-channelNames.forEach((name,i) => $('input-bars').append(makeBar(name,'input-' + i)));
-[...channelNames, 'AUX1 / ARM'].forEach((name,i) => $('fc-bars').append(makeBar(name,'fc-' + i)));
-function bar(id, value, min, max, suffix='') {
- const fraction = Number.isFinite(value) ? Math.max(0,Math.min(1,(value-min)/(max-min))) : 0;
- $(id+'-value').textContent = Number.isFinite(value) ? Math.round(value) + suffix : '—';
- $(id+'-fill').style.width = 100*fraction + '%'; $(id+'-marker').style.left = 100*fraction + '%';
+channelNames.forEach((n,i) => $('input-bars').append(makeBar(n,'input-'+i)));
+[...channelNames,'ARM'].forEach((n,i) => $('fc-bars').append(makeBar(n,'fc-'+i)));
+function bar(id, value, min, max) {
+ const valid=Number.isFinite(value), fraction=valid?Math.max(0,Math.min(1,(value-min)/(max-min))):0;
+ setText(id+'-value',valid?Math.round(value):'—');
+ $(id+'-fill').style.width=100*fraction+'%'; $(id+'-marker').style.left=100*fraction+'%';
+ $(id+'-value').closest('.channel-row').classList.toggle('no-data',!valid);
 }
-function moveStick(prefix, x, y) {
- for (const name of [prefix+'-stick',prefix+'-stick-halo']) {
-  $(name).setAttribute('cx', (prefix === 'left' ? 207 : 453) + 49*x);
-  $(name).setAttribute('cy', 218 - 49*y);
+function moveStick(prefix,x,y) {
+ for(const name of [prefix+'-stick',prefix+'-stick-halo']) {
+  $(name).setAttribute('cx',(prefix==='left'?207:453)+49*x); $(name).setAttribute('cy',218-49*y);
  }
 }
-function fmtNumber(value, digits=1) {return Number.isFinite(value) ? value.toFixed(digits) : '—';}
-function setPill(id, text, ok) {$(id).textContent = text; $(id).classList.toggle('ok',!!ok);}
-function settingsFromForm() {
- return {host:$('host-input').value.trim(),transport:$('transport-input').value,
-         seconds:Number($('duration-input').value),video_bitrate:Number($('bitrate-input').value)};
-}
-async function saveSettings(show=true) {
- await api('settings', settingsFromForm()); if(show) notice('Setup preferences saved.');
+function status(id,ok,title) {$(id).classList.toggle('ok',!!ok);if(title)$(id).title=title;}
+function fmt(v,n=1) {return Number.isFinite(v)?v.toFixed(n):'—';}
+function settingsFromForm() {return {host:$('host-input').value.trim(),transport:$('transport-input').value,seconds:Number($('duration-input').value),video_bitrate:Number($('bitrate-input').value)};}
+async function saveSettings(show=true) {await api('settings',settingsFromForm());if(show)notice('Saved');}
+function mappingRow(label,value) {const row=document.createElement('div');row.className='mapping-row';const a=document.createElement('span'),b=document.createElement('span');a.textContent=label;b.textContent=value;row.append(a,b);return row;}
+function guidance(s,selectedMode,ready) {
+ const q=s.session, h=s.hid;
+ if(disconnected) return ['!','CONSOLE OFFLINE','Reconnecting. Output watchdog active.','error'];
+ if(s.job.busy) return ['↻','PREPARING',s.job.message,''];
+ if(wizard.active) return ['◎','CALIBRATION OPEN','Finish or cancel calibration.',''];
+ if(q.active) {
+  if(q.state==='ready')return ['↑','SA → HIGH','Motors may spin · 2s cutoff','ready'];
+  if(q.state==='live')return ['●',q.kind==='arming'?'ARM REQUESTED':'OUTPUT ACTIVE',q.kind==='arming'?'SA low / STOP → disarm':q.kind==='synthetic'?'Roll link check · ARM locked':'SA low / STOP → end','live'];
+  if(q.state==='recovering')return ['↓','HOLD SA LOW','Wait for the ready cue.',''];
+  if(q.state==='preparing'||q.state==='starting')return ['↻','AUTO SETUP',q.message.includes('FC')?'Checking indoor FC profile…':'Preparing relay…',''];
+  if(q.state==='stopping')return ['■','STOPPING','Sending disarm frames…',''];
+  const text=q.message||'';
+  if(/Connect FC USB/i.test(text))return ['↗','CONNECT FC USB','Indoor profile required once.',''];
+  if(/Connect the TX15/i.test(text))return ['↗','CONNECT TX15','USB joystick mode',''];
+  if(/throttle/i.test(text))return ['↓','THROTTLE → MIN','Waiting · ARM held off',''];
+  if(/SA.*low|SA.*off/i.test(text))return ['↓','SA → LOW','Wait for the ready cue.',''];
+  return ['○','WAITING',text,''];
+ }
+ if(q.state==='error' && q.kind===selectedMode)return ['!','TEST STOPPED',q.message,'error'];
+ if(q.kind===selectedMode && q.state==='stopped')return ['✓','TEST ENDED',selectedMode==='arming'?'SA low → Start again': 'Output stopped · ready to retry',''];
+ if(selectedMode==='arming')return ['○','READY TO SET UP','Start → SA low → high',''];
+ if(!ready.relay)return ['↗','PREPARE RELAY','Link → Check / Prepare',''];
+ if(!ready.fc)return ['↗','CONNECT FC USB','SBUS · disarmed',''];
+ if(selectedMode==='joystick') {
+  if(!h.connected)return ['↗','CONNECT TX15','USB joystick mode',''];
+  if(!ready.throttle)return ['↓','THROTTLE → MIN','Lower fully before Start.',''];
+  if(!h.enabled)return ['↑','SA → ENABLE','Use the calibrated switch position.',''];
+ }
+ return ['✓','READY',selectedMode==='synthetic'?'4s roll sweep · ARM locked':'Live sticks · ARM locked','ready'];
 }
 function render(s) {
- const hid = s.hid, fc = s.fc, pi = s.pi, session = s.session;
- if (!hydrated) {
-  $('host-input').value=s.settings.host; $('transport-input').value=s.settings.transport;
-  $('duration-input').value=s.settings.seconds; $('bitrate-input').value=s.settings.video_bitrate; hydrated=true;
- }
- setPill('radio-badge',hid.connected?'TX15 · connected':'TX15 · connect USB',hid.connected);
- setPill('link-badge',pi.connected?'Relay · '+pi.host:pi.checking?'Relay · checking':'Relay · unchecked',pi.connected);
- $('radio-stage').classList.toggle('disconnected',!hid.connected); $('hid-dot').classList.toggle('off',!hid.connected);
- $('hid-detail').textContent=hid.connected?'USB joystick connected · live preview':hid.error||'Connect TX15 USB joystick';
- $('radio-lcd').textContent=hid.connected?'USB CONNECTED':'CONNECT USB';
- const normalized = (hid.channels||[]).map(v => 2*(v-172)/1639-1);
- moveStick('left',normalized[3]||0,Number.isFinite(normalized[2])?normalized[2]:-1);
- moveStick('right',normalized[0]||0,normalized[1]||0);
- channelNames.forEach((n,i) => bar('input-'+i,hid.connected ? 1000 + (hid.channels[i]-172)*1000/1639 : null,1000,2000));
- const gate=s.mapping.deadman_axis;
- const sa=hid.connected && gate ? hid.axes[gate.index] : undefined;
- const saPosition=Number.isFinite(sa)?(sa < -12000?0:sa > 12000?2:1):-1;
- document.querySelectorAll('#sa-positions>div').forEach(p => p.classList.toggle('selected',Number(p.dataset.position)===saPosition));
- $('sa-title').textContent=saPosition>=0?['Position 1 · low','Position 2 · centre','Position 3 · high'][saPosition]:'Waiting for input';
- $('sa-number').textContent=saPosition<0?'—':['−100%','0%','+100%'][saPosition];
- $('sa-lever').setAttribute('d',['M160 85 L145 53','M160 85 L160 49','M160 85 L175 53'][Math.max(0,saPosition)]);
- $('sa-explainer').textContent=hid.enabled?'Selected enable position · ready for a bench test':'Bench enable is off. Move SA to its saved enable position.';
- $('fc-badge').textContent=fc.connected?'USB CONNECTED':'USB OFFLINE';
- $('fc-battery').textContent=fc.connected?fmtNumber(fc.voltage,2)+' V':'—';
- $('fc-receiver').textContent=fc.connected?(fc.sbus?'SBUS':'CHECK RX'):'—';
- $('fc-armed').textContent=fc.connected?(fc.armed?'ARMED':'DISARMED'):'—';
- $('fc-armed').style.color=fc.armed?'var(--red)':'var(--teal)';
- $('fc-detail').textContent=fc.connected?`TAKER H743 · ${fc.cells||0}S battery · read-only USB telemetry`:fc.error||'Connect the flight controller over USB';
- [0,1,3,2,4].forEach((source,i) => bar('fc-'+i,fc.connected?fc.channels[source]:null,987,2011));
- $('pi-state').textContent=pi.connected?'CONNECTED':pi.checking?'CHECKING':'UNCHECKED';
- $('ping-value').textContent=Number.isFinite(pi.ping_ms)?fmtNumber(pi.ping_ms)+' ms':'—';
- $('video-state').textContent=pi.connected?(pi.video==='active'&&pi.media==='active'?'Running':'Needs attention'):'—';
- $('receiver-state').textContent=pi.connected?(pi.receiver&&pi.driver&&pi.key?'Prepared':'Prepare relay'):'—';
- $('pi-detail').textContent=pi.error|| (pi.connected?'Connected to '+pi.hostname+'. Saved credentials stay on this laptop.':'Use Check connection to inspect the relay.');
- $('path-radio').classList.toggle('ok',hid.connected); $('path-pi').classList.toggle('ok',pi.connected); $('path-fc').classList.toggle('ok',fc.connected);
- $('toggle-fc').textContent=s.fc_enabled?'Release FC USB':'Connect FC USB';
- const requirements=[['TX15 connected',hid.connected],['SA in the selected enable position',hid.enabled],
-  ['Throttle fully down',hid.connected&&hid.channels[2]<=210],['Relay connected and prepared',pi.connected&&pi.receiver&&pi.driver&&pi.key],
-  ['FC connected, SBUS, disarmed',fc.connected&&fc.sbus&&!fc.armed]];
- $('readiness').replaceChildren(...requirements.map(([text,ok]) => {let row=document.createElement('div');row.className='ready-row'+(ok?' ok':'');let icon=document.createElement('i');icon.textContent=ok?'✓':'○';row.append(icon,document.createTextNode(text));return row;}));
- $('start-session').disabled=session.active||s.job.busy||wizard.active||requirements.some(r=>!r[1]);
- $('stop-session').disabled=!session.active;
- $('synthetic-test').disabled=session.active||s.job.busy||wizard.active||!requirements[3][1]||!requirements[4][1];
- $('session-title').textContent=session.active?(session.state==='live'?'Control is live.':'Starting session…'):session.state==='error'?'Session needs attention.':'Ready when you are.';
- $('session-description').textContent=session.active?session.message:session.state==='error'?session.message:'Start sends the four stick channels. All AUX stay low; returning SA to off ends the run.';
- $('frame-count').textContent=session.frames||0;
- $('session-clock').textContent=session.active?Math.max(0,Math.ceil(session.seconds-(Date.now()/1000-session.started)))+'s':'—';
- document.querySelector('.session-panel').classList.toggle('active-session',session.active);
- for (const id of ['check-pi','prepare-pi','save-connection','save-video','apply-bitrate','restart-video','toggle-fc','wizard-start','duration-input']) $(id).disabled=session.active||s.job.busy;
- $('check-pi').textContent=s.job.busy?s.job.message:'Check connection';
- const arm=s.arm_profile||{};
- $('arm-profile-state').textContent=arm.message||'Prepare the FC over USB';
- $('prepare-arm').disabled=session.active||s.job.busy||!fc.connected||fc.armed;
- $('restore-arm').disabled=session.active||s.job.busy||!fc.connected||fc.armed||!arm.ready;
- $('start-arm').disabled=session.active||s.job.busy||wizard.active||!arm.ready||!requirements[3][1]||!hid.connected||hid.enabled||hid.channels[2]>210;
- $('stop-arm').disabled=!session.active;
- $('arm-test-status').textContent=session.active&&session.kind==='arming'?session.message:session.kind==='arming'?session.message+` · ${session.frames||0} control frames`:'Begin with SA low and throttle down. Start opens a 30-second switch-test window.';
- $('arm-fc-status').textContent=fc.connected?`FC ${fc.armed?'ARMED':'DISARMED'} · blockers: ${(fc.arming_blockers||[]).join(', ')||'none'}`:'FC USB unplugged: motor/arming state is not available. Watch the drone or FPV OSD.';
- document.querySelector('.bench-badge span').textContent=session.active&&session.kind==='arming'?'ARM TEST':'ARM LOCKED';
- $('radio-lock').textContent=session.active&&session.kind==='arming'?'ARM TEST / IDLE ONLY':'ARM OUTPUT LOCKED';
- const names=['Roll','Pitch','Throttle','Yaw'];
- $('mapping-list').replaceChildren(...s.mapping.axes.map((axis,i)=>mappingRow(names[i],`Input ${axis.index} · ${axis.invert?'reversed':'normal'}`)),mappingRow('SA enable',gate?`Input ${gate.index} · ${gate.min>0?'high':gate.max<0?'low':'custom'}`:'Button'));
- const last=s.logs.at(-1); $('activity-latest').textContent=s.job.busy?s.job.message:last?last.text:'Live hardware preview';
- $('activity-log').replaceChildren(...s.logs.slice().reverse().map(log=>{let row=document.createElement('div');row.className='log-row '+log.level;let time=document.createElement('span');time.textContent=log.time;let text=document.createElement('span');text.textContent=log.text;row.append(time,text);return row;}));
- if(wizard.active) observeCalibration(hid);
+ if(disconnected)s={...s,hid:{...s.hid,connected:false},fc:{connected:false,channels:[]},pi:{connected:false},video:{available:false,updated:Date.now()/1000}};
+ const h=s.hid,f=s.fc,p=s.pi,q=s.session,a=s.arm_profile||{};
+ if(!hydrated){$('host-input').value=s.settings.host;$('transport-input').value=s.settings.transport;$('duration-input').value=s.settings.seconds;$('bitrate-input').value=s.settings.video_bitrate;hydrated=true;}
+ $('preview-banner').hidden=!s.preview;document.body.classList.toggle('is-preview',!!s.preview);
+ status('console-status',!disconnected);setText('console-status',disconnected?'OFFLINE':'LOCAL');
+ status('radio-badge',h.connected,h.connected?'TX15 USB connected':'TX15 USB offline');
+ status('link-badge',p.connected,p.connected?'Last check: '+(p.host||s.settings.host):'Relay not checked');
+ status('profile-indicator',a.ready,a.message);setText('profile-indicator',a.ready?'INDOOR READY':'AUTO SETUP');
+ $('radio-stage').classList.toggle('disconnected',!h.connected);
+ setText('hid-detail',h.connected?'USB CONNECTED':'USB OFFLINE');setText('radio-lcd',h.connected?'USB CONNECTED':'CONNECT USB');
+ setText('radio-lock',q.active&&q.kind==='arming'?'ARM TEST / IDLE ONLY':'PREVIEW / NO OUTPUT');
+ const normal=(h.channels||[]).map(v=>2*(v-172)/1639-1);
+ moveStick('left',h.connected?normal[3]||0:0,h.connected&&Number.isFinite(normal[2])?normal[2]:-1);
+ moveStick('right',h.connected?normal[0]||0:0,h.connected?normal[1]||0:0);
+ channelNames.forEach((n,i)=>bar('input-'+i,h.connected?1000+(h.channels[i]-172)*1000/1639:null,1000,2000));
+ const gate=s.mapping.deadman_axis,sa=h.connected&&gate?h.axes[gate.index]:undefined;
+ const pos=Number.isFinite(sa)?(sa<-12000?0:sa>12000?2:1):-1;
+ document.querySelectorAll('#sa-positions>div').forEach(el=>{el.classList.toggle('selected',Number(el.dataset.position)===pos);el.setAttribute('aria-label',['SA low','SA middle','SA high'][el.dataset.position]+(Number(el.dataset.position)===pos?' selected':''));});
+ setText('sa-number',pos<0?'—':['−100%','0%','+100%'][pos]);
+ $('sa-lever').setAttribute('d',['M160 85 L145 53','M160 85 L160 49','M160 85 L175 53'][Math.max(0,pos)]);
+ const throttle=h.connected&&Number.isFinite(h.channels[2])?Math.max(0,Math.min(100,(h.channels[2]-172)*100/1639)):null;
+ setText('throttle-value',throttle===null?'—':throttle<=2.4?'MIN':Math.round(throttle)+'%');$('throttle-fill').style.width=(throttle||0)+'%';
+ setText('fc-battery',f.connected?fmt(f.voltage,2)+' V':'—');
+ setText('fc-armed',f.connected?(f.armed?'ARMED':'DISARMED'):'UNKNOWN');$('fc-armed').style.color=f.connected?(f.armed?'var(--red)':'var(--green)'):'var(--muted)';
+ setText('fc-badge',f.connected?'USB READBACK':'USB OFFLINE');
+ setText('fc-detail',f.connected?`TAKER H743 / ${f.sbus?'SBUS':'CHECK RX'} / ${f.cells||'?'}S`:'USB offline · connect TAKER H743');
+ setText('arm-fc-status',f.connected?((f.arming_blockers||[]).length?'FC: '+f.arming_blockers.join(' · '):'FC disarmed · no blockers'):'FC USB offline · armed state unknown');
+ if(f.connected&&f.armed)setText('arm-fc-status','FC REPORTS ARMED');
+ [0,1,3,2,4].forEach((source,i)=>bar('fc-'+i,f.connected?f.channels[source]:null,987,2011));
+ const age=p.updated?Math.max(0,Date.now()/1000-p.updated):null;
+ setText('ping-value',p.connected&&Number.isFinite(p.ping_ms)?fmt(p.ping_ms)+' ms':'—');setText('rtt-age',p.connected&&age>60?'LAST':'');
+ $('ping-value').title=age!==null?'Measured '+Math.round(age)+' seconds ago; not video latency':'Check link to measure';
+ setText('pi-state',p.connected?'CONNECTED':p.checking?'CHECKING':'UNCHECKED');
+ setText('video-state',p.connected?(p.video==='active'&&p.media==='active'?'RUNNING':'CHECK SERVICES'):'—');
+ setText('receiver-state',p.connected?(p.receiver&&p.driver&&p.key?'PREPARED':'PREPARE RELAY'):'—');
+ setText('pi-detail',p.error||(p.connected?p.hostname+' / '+s.settings.host:'Check the relay to measure round-trip time.'));
+ for(const [id,ok] of [['path-radio',h.connected],['path-pi',p.connected],['path-fc',f.connected]])$(id).classList.toggle('ok',!!ok);
+ setText('toggle-fc',s.fc_enabled?'Release FC USB':'Connect FC USB');setText('arm-profile-state',a.message||'Start prepares the profile automatically.');
+ const ready={relay:p.connected&&p.receiver&&p.driver&&p.key,fc:f.connected&&f.sbus&&!f.armed,throttle:h.connected&&h.channels[2]<=210};
+ const selectedMode=q.active?q.kind:mode,locked=q.active||s.job.busy||pending||disconnected;
+ document.querySelectorAll('[data-mode]').forEach(el=>{el.classList.toggle('selected',el.dataset.mode===selectedMode);el.setAttribute('aria-pressed',String(el.dataset.mode===selectedMode));el.disabled=q.active||pending;});
+ setText('mode-caption',selectedMode==='arming'?'PROPS OFF · IDLE ONLY':'PROPS OFF · ARM LOCKED');
+ setText('test-limit',selectedMode==='arming'?'2s MAX':selectedMode==='synthetic'?'4s':s.settings.seconds+'s');
+ const good=selectedMode==='arming'||(ready.relay&&ready.fc&&(selectedMode==='synthetic'||h.connected&&h.enabled&&ready.throttle));
+ $('start-test').disabled=locked||wizard.active||!good;
+ setText('start-label',q.active?'Running…':q.kind===selectedMode?'Start again':selectedMode==='arming'?'Start arm test':'Start test');
+ // Stop stays available even while another request or a reconnection is pending.
+ $('stop-test').disabled=!q.active;$('stop-global').disabled=!q.active;
+ for(const id of ['check-pi','prepare-pi','save-connection','save-video','apply-bitrate','restart-video','toggle-fc','wizard-start','duration-input','host-input','transport-input','bitrate-input'])$(id).disabled=locked;
+ $('prepare-arm').disabled=locked||!f.connected||f.armed;$('restore-arm').disabled=locked||!f.connected||f.armed||!a.ready;
+ const g=guidance(s,selectedMode,ready);setText('guidance-symbol',g[0]);setText('test-title',g[1]);setText('test-detail',g[2]);$('test-guidance').className='test-guidance '+g[3];$('test-guidance').title=q.active?q.message:'';
+ setText('frame-count',q.frames||0);setText('session-state',q.active?(q.state==='live'?'OUTPUT ACTIVE':q.frames?'ARM HELD LOW':'SETUP / OUTPUT OFF'):'OUTPUT OFF');
+ setText('session-clock',q.active?(q.kind==='arming'?'WINDOW ':'')+Math.max(0,Math.ceil(q.seconds-(Date.now()/1000-q.started)))+'s':'—');
+ document.querySelector('.session-meter').classList.toggle('active',q.active);updateGlobalStop();
+ setText('global-stop-label',q.kind==='arming'?'ARM TEST ACTIVE':'TEST ACTIVE');
+ const mappingKey=JSON.stringify(s.mapping);
+ if(mappingKey!==renderedMapping){renderedMapping=mappingKey;$('mapping-list').replaceChildren(...s.mapping.axes.map((ax,i)=>mappingRow(channelNames[i],`AX${ax.index} ${ax.invert?'REV':'NOR'}`)),mappingRow('SA',gate?`AX${gate.index} ${gate.min>0?'HIGH':gate.max<0?'LOW':'CUSTOM'}`:'BUTTON'));}
+ const latest=s.logs.at(-1);setText('activity-latest',s.job.busy?s.job.message:latest?.text||'SYSTEM STANDBY');
+ const logKey=JSON.stringify(s.logs);if(logKey!==renderedLogs){renderedLogs=logKey;$('activity-log').replaceChildren(...s.logs.slice().reverse().map(log=>{const row=document.createElement('div');row.className='log-row '+log.level;const time=document.createElement('span'),text=document.createElement('span');time.textContent=log.time;text.textContent=log.text;row.append(time,text);return row;}));}
+ syncVideo(s);
+ if(wizard.active)observeCalibration(h);
 }
-function mappingRow(label,value) {let row=document.createElement('div');row.className='mapping-row';let a=document.createElement('span'),b=document.createElement('span');a.textContent=label;b.textContent=value;row.append(a,b);return row;}
-let lastError=false;
+function syncVideo(s,force=false) {
+ const source=s.video||{},fresh=source.updated&&Date.now()/1000-source.updated<15;
+ const available=source.available&&fresh&&!disconnected;
+ setText('transport-label',s.settings.transport.toUpperCase());setText('stream-bitrate',s.settings.video_bitrate+' Mbps');
+ $('toggle-video').setAttribute('aria-pressed',String(videoEnabled));$('toggle-video').setAttribute('aria-label',videoEnabled?'Pause video':'Play video');$('toggle-video').title=videoEnabled?'Pause video':'Play video';
+ setText('feed-status',videoEnabled?(available?'SOURCE ONLINE':'SOURCE OFFLINE'):'PAUSED');
+ setText('source-label',available?'STREAM AVAILABLE':source.updated?'SOURCE UNAVAILABLE':'CHECKING SOURCE');$('source-dot').classList.toggle('ok',!!available);
+ setText('video-placeholder-title',!videoEnabled?'VIDEO PAUSED':disconnected?'CONSOLE OFFLINE':source.updated?'NO VIDEO LINK':'CONNECTING');
+ setText('video-placeholder-detail',!videoEnabled?'PRESS POWER TO RESUME':s.settings.host+' / FPV 01');
+ const url=videoEnabled&&available&&currentPage==='live'?(s.preview?'/preview-feed':`http://${s.settings.host}:${s.settings.transport==='hls'?8888:8889}/fpv1/`):'';
+ if(url!==videoURL||force){videoURL=url;$('video-frame').replaceChildren();if(url){const frame=document.createElement('iframe');frame.title='FPV 01 video player';frame.src=url;frame.allow='autoplay; fullscreen';$('video-frame').append(frame);}}
+ $('video-placeholder').hidden=!!url;
+}
 async function poll() {
- try {const response=await fetch('/api/state',{cache:'no-store'});if(!response.ok)throw Error('Setup console unavailable');state=await response.json();render(state);if(lastError){notice('Console reconnected.');lastError=false;}}
- catch(error){if(!lastError)notice('Console connection lost. Control output will stop. Reconnecting…',true);lastError=true;}
- setTimeout(poll,120);
+ try {
+  const r=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(2000)});if(!r.ok)throw Error('Console unavailable');
+  state=await r.json();if(disconnected)$('notice').hidden=true;disconnected=false;render(state);
+ } catch(error) {
+  if(!disconnected)notice('Console offline. Control watchdog active. Reconnecting…',true);
+  disconnected=true;
+  if(state)render(state);
+ }
+ setTimeout(poll,150);
 }
-function toggleVideo(open=!videoOpen) {
- videoOpen=open; const container=$('video-container'); container.replaceChildren();
- if(open && state){videoURL=`http://${state.settings.host}:${state.settings.transport==='hls'?8888:8889}/fpv1/`;let frame=document.createElement('iframe');frame.title='FPV 01 live video';frame.src=videoURL;frame.allow='autoplay; fullscreen';container.append(frame);}
- else {let box=document.createElement('div');box.className='video-placeholder';box.innerHTML='<span>▷</span><h3>Your camera feed lives here.</h3><p>Open one player to keep network traffic low.</p>';container.append(box);}
- $('toggle-video').textContent=open?'Close live video':'Open live video';
-}
-$('toggle-video').addEventListener('click',()=>toggleVideo());
-$('save-connection').addEventListener('click',perform(()=>saveSettings()));
-$('save-video').addEventListener('click',perform(async()=>{await saveSettings();if(videoOpen)toggleVideo(false);}));
-$('check-pi').addEventListener('click',perform(async()=>{await saveSettings(false);await api('check');}));
-$('prepare-pi').addEventListener('click',perform(async()=>{await saveSettings(false);await api('prepare');}));
-$('apply-bitrate').addEventListener('click',perform(async()=>{await saveSettings(false);await api('video_bitrate');notice('Applying bitrate. Video will reconnect.');}));
-$('restart-video').addEventListener('click',perform(async()=>{await api('video_restart');notice('Restarting video and enabling Alfa WebRTC access.');}));
-$('toggle-fc').addEventListener('click',perform(()=>api('fc',{enabled:!state.fc_enabled})));
-$('start-session').addEventListener('click',perform(async()=>{await saveSettings(false);await api('start',{kind:'joystick'});}));
-$('synthetic-test').addEventListener('click',perform(()=>api('start',{kind:'synthetic'})));
-$('stop-session').addEventListener('click',perform(()=>api('stop')));
-$('prepare-arm').addEventListener('click',perform(()=>api('arm_prepare')));
-$('restore-arm').addEventListener('click',perform(()=>api('arm_restore')));
-$('start-arm').addEventListener('click',perform(()=>api('start',{kind:'arming'})));
-$('stop-arm').addEventListener('click',perform(()=>api('stop')));
-$('duration-input').addEventListener('change',perform(()=>saveSettings(false)));
+$('toggle-video').onclick=()=>{videoEnabled=!videoEnabled;if(state)syncVideo(state);};
+$('reload-video').onclick=()=>{videoEnabled=true;if(state)syncVideo(state,true);};
+$('expand-video').onclick=()=>{document.body.classList.toggle('expanded');$('expand-video').setAttribute('aria-pressed',String(document.body.classList.contains('expanded')));$('expand-video').setAttribute('aria-label',document.body.classList.contains('expanded')?'Restore video layout':'Expand video');};
+$('toggle-log').onclick=()=>{$('activity-log').hidden=!$('activity-log').hidden;$('toggle-log').setAttribute('aria-expanded',String(!$('activity-log').hidden));if(!$('activity-log').hidden)$('activity-log').scrollIntoView({block:'nearest'});};
+$('save-connection').onclick=perform(()=>saveSettings());
+$('save-video').onclick=perform(()=>saveSettings());
+$('check-pi').onclick=perform(async()=>{await saveSettings(false);await api('check');});
+$('prepare-pi').onclick=perform(async()=>{await saveSettings(false);await api('prepare');});
+$('apply-bitrate').onclick=perform(async()=>{await saveSettings(false);await api('video_bitrate');notice('Applying bitrate · stream will reconnect');});
+$('restart-video').onclick=perform(async()=>{await api('video_restart');notice('Restarting stream');});
+$('toggle-fc').onclick=perform(()=>api('fc',{enabled:!state.fc_enabled}));
+$('prepare-arm').onclick=perform(()=>api('arm_prepare'));
+$('restore-arm').onclick=perform(()=>api('arm_restore'));
+$('start-test').onclick=perform(async()=>{if(wizard.active)return;await api('start',{kind:mode});});
+const stop=async()=>{try{await api('stop');}catch(e){notice('Stop not acknowledged. Link-loss watchdog remains active.',true);}};
+$('stop-test').onclick=stop;$('stop-global').onclick=stop;
+$('duration-input').onchange=perform(()=>saveSettings(false));
 
 const steps=[
- {name:'Roll',symbol:'↔',slot:0,title:'Right stick. Right, then left.',instruction:'Move the right stick fully right, then fully left. Keep the other stick still. Return to centre when done.'},
- {name:'Pitch',symbol:'↕',slot:1,title:'Right stick. Forward, then back.',instruction:'Move the right stick fully forward, then fully back. Keep its left/right position centred. Return to centre.'},
- {name:'Yaw',symbol:'↔',slot:3,title:'Left stick. Right, then left.',instruction:'Move the left stick fully right, then fully left. Keep throttle still. Return left/right movement to centre.'},
- {name:'Throttle',symbol:'↑',slot:2,title:'Throttle. Down, up, then down.',instruction:'Start with throttle fully down. Move it fully up, then fully down again. Keep yaw centred.'},
- {name:'SA',symbol:'Ⅲ',slot:4,title:'SA. Visit all three positions.',instruction:'Move only SA through all three positions. Finish in the position you want to enable control—your chosen arming position.'}
+ {name:'Roll',symbol:'↔',slot:0,title:'Roll / right stick',instruction:'Right → left → centre. Keep other controls still.'},
+ {name:'Pitch',symbol:'↕',slot:1,title:'Pitch / right stick',instruction:'Forward → back → centre. Keep roll centred.'},
+ {name:'Yaw',symbol:'↔',slot:3,title:'Yaw / left stick',instruction:'Right → left → centre. Keep throttle still.'},
+ {name:'Throttle',symbol:'↑',slot:2,title:'Throttle / left stick',instruction:'Down → up → down. Keep yaw centred.'},
+ {name:'SA',symbol:'Ⅲ',slot:4,title:'SA / enable switch',instruction:'Low → middle → high. Finish at your chosen enable end.'}
 ];
 const wizard={active:false,step:0,samples:{},first:{},baseline:{},mapping:null,candidate:null,ready:false};
 function beginStep() {
@@ -165,8 +213,8 @@ function beginStep() {
  Object.entries(state.hid.axes).forEach(([index,value])=>wizard.samples[index]=[value,value]);
  const step=steps[wizard.step];$('wizard-title').textContent=step.title;$('wizard-instruction').textContent=step.instruction;
  $('wizard-symbol').textContent=step.symbol;$('wizard-counter').textContent=`${wizard.step+1} / ${steps.length} · ${step.name.toUpperCase()}`;
- $('wizard-feedback').textContent='Move this control to both ends. Take your time.';
- $('wizard-next').textContent=wizard.step===4?'Save calibration ✓':'Next control →';$('wizard-next').disabled=true;
+ $('wizard-feedback').textContent='Move to both ends.';
+ $('wizard-next').textContent=wizard.step===4?'Save mapping ✓':'Next →';$('wizard-next').disabled=true;
  $('wizard-min').textContent='—';$('wizard-max').textContent='—';$('wizard-axis').textContent='—';
  $('wizard-steps').replaceChildren(...steps.map((s,i)=>{let node=document.createElement('span');node.className='wizard-step'+(i===wizard.step?' active':i<wizard.step?' complete':'');node.title=s.name;return node;}));
 }
@@ -184,27 +232,29 @@ function observeCalibration(hid) {
  const [key,[min,max]]=candidates[0],span=max-min;
  $('wizard-min').textContent=min;$('wizard-max').textContent=max;$('wizard-axis').textContent=span>5000?'Input '+key:'—';
  wizard.ready=span>=50000;
- if(candidates[1]&&candidates[1][1][1]-candidates[1][1][0]>span*.65&&span>10000){wizard.ready=false;$('wizard-feedback').textContent='More than one control moved. Click Retry this control and move only the requested control.';showRetry();}
+ if(candidates[1]&&candidates[1][1][1]-candidates[1][1][0]>span*.65&&span>10000){wizard.ready=false;$('wizard-feedback').textContent='Multiple inputs moved. Retry.';showRetry();}
  else if(wizard.ready){
   wizard.candidate={index:Number(key),min,max,invert:wizard.first[key]<0};
-  if(wizard.step===4){const current=hid.axes[key],middle=(min+max)/2;if(Math.abs(current-middle)<span*.3){wizard.ready=false;$('wizard-feedback').textContent='Range captured. Leave SA at the end position you want to enable control.';}
+  if(wizard.step===4){const current=hid.axes[key],middle=(min+max)/2;if(Math.abs(current-middle)<span*.3){wizard.ready=false;$('wizard-feedback').textContent='Choose the SA enable end.';}
    else{wizard.candidate={index:Number(key),min:current>middle?Math.round(middle+span*.25):min,max:current>middle?max:Math.round(middle-span*.25)};$('wizard-feedback').textContent=`SA ${current>middle?'high / position 3':'low / position 1'} selected. Save when you’re ready.`;}}
-  else $('wizard-feedback').textContent='Full range captured. Click Next when you’re ready.';
- }else $('wizard-feedback').textContent=span>5000?'Movement detected. Reach both full ends to capture the range.':'Move only the requested control.';
+  else $('wizard-feedback').textContent='Range captured. Next when ready.';
+ }else $('wizard-feedback').textContent=span>5000?'Reach both ends.':'Move only the requested control.';
  $('wizard-next').disabled=!wizard.ready;
 }
-function showRetry(){if($('wizard-retry'))return;let button=document.createElement('button');button.id='wizard-retry';button.className='secondary';button.textContent='Retry this control';button.addEventListener('click',()=>{button.remove();beginStep();});document.querySelector('.wizard-actions').append(button);}
+function showRetry(){if($('wizard-retry'))return;let button=document.createElement('button');button.id='wizard-retry';button.className='secondary';button.textContent='Retry';button.addEventListener('click',()=>{button.remove();beginStep();});document.querySelector('.wizard-actions').append(button);}
 $('wizard-start').addEventListener('click',()=>{
  if(!state?.hid.connected){notice('Connect the TX15 in USB joystick mode first.',true);return;}
  if(state.session.active){notice('Stop the bench session before calibration.',true);return;}
  wizard.active=true;wizard.step=0;wizard.mapping={note:'TX15 calibration from the Ascent setup console',axes:[null,null,null,null]};
  $('wizard-start').hidden=true;$('wizard-next').hidden=false;$('wizard-cancel').hidden=false;beginStep();
 });
-$('wizard-cancel').addEventListener('click',()=>{wizard.active=false;$('wizard-start').hidden=false;$('wizard-next').hidden=true;$('wizard-cancel').hidden=true;$('wizard-retry')?.remove();$('wizard-title').textContent='Calibration cancelled.';$('wizard-instruction').textContent='Your previous calibration is unchanged.';$('wizard-feedback').textContent='Live preview remains available.';$('wizard-counter').textContent='SELF PACED';});
+$('wizard-cancel').addEventListener('click',()=>{wizard.active=false;$('wizard-start').hidden=false;$('wizard-next').hidden=true;$('wizard-cancel').hidden=true;$('wizard-retry')?.remove();$('wizard-title').textContent='Calibration cancelled';$('wizard-instruction').textContent='Your previous calibration is unchanged.';$('wizard-feedback').textContent='No changes saved.';$('wizard-counter').textContent='SELF PACED';});
 $('wizard-next').addEventListener('click',perform(async()=>{
  if(!wizard.ready)return;
  if(wizard.step<4){wizard.mapping.axes[steps[wizard.step].slot]=wizard.candidate;wizard.step++;$('wizard-retry')?.remove();beginStep();}
- else{wizard.mapping.deadman_axis=wizard.candidate;await api('mapping',wizard.mapping);wizard.active=false;$('wizard-start').hidden=false;$('wizard-start').textContent='Recalibrate controls';$('wizard-next').hidden=true;$('wizard-cancel').hidden=true;$('wizard-retry')?.remove();$('wizard-symbol').textContent='✓';$('wizard-title').textContent='Your TX15 is set.';$('wizard-instruction').textContent='Your sticks and SA enable position are saved. Preview them on the Controller screen, then open Bench test when you’re ready.';$('wizard-feedback').textContent='Saved locally. ARM remains blocked for bench testing.';$('wizard-counter').textContent='SAVED';notice('TX15 calibration saved.');}
+ else{wizard.mapping.deadman_axis=wizard.candidate;await api('mapping',wizard.mapping);wizard.active=false;$('wizard-start').hidden=false;$('wizard-start').textContent='Calibrate again';$('wizard-next').hidden=true;$('wizard-cancel').hidden=true;$('wizard-retry')?.remove();$('wizard-symbol').textContent='✓';$('wizard-title').textContent='TX15 mapped';$('wizard-instruction').textContent='Sticks and SA saved. Check them in TX15 view.';$('wizard-feedback').textContent='Saved locally · no output';$('wizard-counter').textContent='SAVED';notice('TX15 calibration saved.');}
 }));
-window.addEventListener('keydown',event=>{if(event.key==='Escape'&&state?.session.active)api('stop').catch(()=>{});});
+
+window.addEventListener('keydown',event=>{if(event.key==='Escape'){if(state?.session.active)stop();document.body.classList.remove('expanded');$('expand-video').setAttribute('aria-pressed','false');}});
+page(location.hash.slice(1)||'live');
 poll();

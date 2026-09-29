@@ -167,3 +167,25 @@ Final Pi check: GPIO14 input/pull-down, no SBUS output process, both video servi
 - CaptureUSB disconnected/re-enumerated during testing; publisher previously exited0 and remained inactive. Deployed Restart=always and recovered stream. Final browser media state:1280x720, readyState4, playing, no media error. Original hardware interruption cause remains unresolved. Ten field-network pings2.23–4.22ms,0loss; no sustained/WAN qualification.
 
 Indoor RAMsettings remain active for user-operated repeat tests. Restore overFCUSB or powercycleFC to reload saved settings; reprepare afterward. Current workflow and controls are documented in [CONTROL-ROOM.md](CONTROL-ROOM.md). No flight readiness claim.
+
+
+## One-click arming workflow and reboot-free recovery — 2026-09-29
+
+Added a dedicated Arm test page with prominent Start/Test again/Stop buttons, live SA/throttle status, a green Ready prompt and video alongside. Start prepares the Pi/key and indoor FC profile automatically; it waits for missing inputs before opening physical output. An early high is held off until a new deliberate low-to-high cycle. The two-second ARM limit, fixed minimum throttle, authentication, watchdog and explicit disarm frames remain.
+
+Diagnosed a real FC USB reader thread crash: termios.error(5, Input/output error) during unplug left stale connected telemetry. The reader now catches/reconnects after that failure; the API also refuses to present stale samples as connected. Verified profile state is retained across console restarts and rechecked on FC reconnect. Failed restores clear that ready state before any writes and retain the original backup.
+
+Live browser checks: Start automatically prepared both dependencies and waited for throttle down with0frames; Stop cancelled without ARM. Restore flight settings applied/read back original settings while the FC remained powered. Test again reapplied indoor settings and waited for the absent TX15 with0frames; Stop cancelled. Console-only software updates preserved the verified indoor profile, and fresh FC readback showed disarmed with GPS blocker clear. No laptop, Pi or FC reboot was issued. No new physical motor spin was requested by this update.
+
+42 tests pass, including early-high recovery without restart, no delayed arm while the switch remains high, throttle-rise disarm, termios unplug/reconnect, saved-profile persistence, and interrupted-restore invalidation. JS syntax, Python compilation and diff checks pass. The final code was installed and the dashboard left idle on /#arming.
+
+
+## Compact video-first console — 2026-09-29
+
+Replaced the explanatory landing pages with a video-led Live cockpit, icon navigation, compact ARM/STICKS/LINK deck, graphical SA/throttle indicators, USB telemetry strip and collapsed activity log. Expanded video keeps test controls accessible. An active Stop bar appears when the primary buttons scroll out of view or another view is selected. TX15 reference graphics, self-paced calibration, connection settings, FC USB release, profile restore and the reboot-free arming workflow remain available.
+
+Video availability is checked independently of RC output using the actual HLS playlist, including MediaMTX session redirects. A player page alone is not accepted as video. Source loss removes the player and recovery remounts it; pauses remain paused. UI connection loss blanks stale telemetry and disables Start. Source availability is distinct from decoded-frame/playback verification.
+
+Browser QA used the real offline production page and a separate, visibly marked in-memory fixture with no hardware imports. Checked 320×568,390×844,768×1024,844×390,1280×720,1440×900 and1920×1080 layouts; no horizontal overflow. Visually inspected desktop/phone/landscape, expanded video, link settings and calibration. Verified simulation-only Start/Stop/repeat, persistent Stop across navigation, floating Stop at the bottom of a320px phone, calibration blocking Start until cancelled, transport preference saving, one iframe at a time, pause/resume, USB-offline unknown values and service-disconnect/reconnect handling. No actual radio/GPIO/motor session was started for the redesign; the Pi/video source was unavailable after owner shutdown. Actual camera decoding in the redesigned page and the next physical arm trial remain bench checks.
+
+45 Python tests pass, including stream-page rejection, bounded same-source HLS redirects and failed-probe cleanup, plus the existing auth/loss/waveform/arming/profile/USB recovery checks. JavaScript syntax, Python compilation and Git whitespace checks pass. Temporary preview service is stopped after QA; production stays at http://127.0.0.1:8767/#live with output idle.

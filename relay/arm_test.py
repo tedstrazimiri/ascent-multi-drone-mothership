@@ -55,6 +55,44 @@ class ArmGate:
         return channels
 
 
+class SwitchIntent:
+    """An early high remains OFF until the operator returns low and raises again."""
+    def __init__(self):
+        self.off_since = None
+        self.raised = False
+        self.finished = False
+        self.phase = 'waiting'
+        self.message = 'Lower SA and throttle to begin.'
+
+    def sample(self, throttle, selected, now):
+        if self.finished:
+            return OFF
+        if self.raised:
+            if not selected or throttle > 210:
+                self.finished = True
+                self.phase, self.message = 'stopping', 'Disarming…'
+                return OFF
+            return ON
+        if throttle > 210:
+            self.off_since = None
+            self.phase, self.message = 'waiting', 'Lower throttle fully; ARM stays off.'
+        elif selected and (self.off_since is None or now - self.off_since < 1):
+            self.off_since = None
+            self.phase, self.message = 'waiting', 'Move SA low/off, then wait for Ready.'
+        elif not selected:
+            if self.off_since is None:
+                self.off_since = now
+            if now - self.off_since >= 1:
+                self.phase, self.message = 'ready', 'Ready — move SA high. Motors may spin for two seconds.'
+            else:
+                self.phase, self.message = 'recovering', 'Hold SA low for a moment…'
+        else:
+            self.raised = True
+            self.phase, self.message = 'live', 'ARM requested · automatic cutoff in two seconds'
+            return ON
+        return OFF
+
+
 def log(**entry):
     print(json.dumps(entry), flush=True)
 
@@ -121,8 +159,8 @@ def sender(args, key):
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     sent = 0
-    raised = False
-    begun = False
+    intent = SwitchIntent()
+    last_phase = None
     start = time.monotonic()
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.connect((args.host, args.port))
@@ -142,22 +180,14 @@ def sender(args, key):
                 except KeyError:
                     time.sleep(.02)
                     continue
-                if channels[2] > 210:
-                    log(state='interlock', message='Throttle moved above minimum')
-                    break
-                if not begun:
-                    if selected:
-                        log(state='interlock', message='Begin with SA off')
-                        break
-                    begun = True
-                if selected and not raised and time.monotonic() - start < 1:
-                    log(state='interlock', message='Keep SA off until the test is ready')
-                    break
-                transmit(ON if selected else OFF)
-                if raised and not selected:
+                output = intent.sample(channels[2], selected, time.monotonic())
+                if intent.phase != last_phase:
+                    log(state='guidance', phase=intent.phase, message=intent.message)
+                    last_phase = intent.phase
+                transmit(output)
+                if intent.finished:
                     log(state='enable_released')
                     break
-                raised |= selected
                 time.sleep(.02)
         except (OSError, ValueError) as exc:
             log(state='link_stopped', message=str(exc))
@@ -185,8 +215,8 @@ def main():
     parser.add_argument('--mapping')
     parser.add_argument('--props-off', action='store_true')
     args = parser.parse_args()
-    if not 0 < args.seconds <= 40 or not 1024 <= args.port <= 65535 or not args.props_off:
-        parser.error('Explicit --props-off and a finite 0..40 second window are required')
+    if not 0 < args.seconds <= 70 or not 1024 <= args.port <= 65535 or not args.props_off:
+        parser.error('Explicit --props-off and a finite 0..70 second window are required')
     for value in ([args.host] if args.mode == 'sender' else [args.bind, args.peer]):
         address = ipaddress.ip_address(value)
         if address.version != 4 or address.is_unspecified or address.is_multicast:

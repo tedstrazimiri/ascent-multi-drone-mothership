@@ -1,9 +1,10 @@
-"""Local graphical Ascent setup console. All physical output is finite and disarmed."""
+"""Local Ascent console with disarmed stick tests and explicit idle-only arm tests."""
 import argparse
 import base64
 import copy
 import glob
 import hashlib
+import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
 import json
@@ -16,9 +17,10 @@ import signal
 import socket
 import subprocess
 import sys
+import termios
 import threading
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 from .joystick import Joystick, validate_mapping
 from .fc import Monitor, devices
@@ -56,6 +58,41 @@ def private_json(path, value):
     temporary.replace(path)
 
 
+def saved_arm_profile():
+    if ARM_BACKUP.exists() and json.loads(ARM_BACKUP.read_text()).get('verified') is True:
+        return {'ready': True, 'message': 'Indoor setup retained · reconnect USB if the FC lost power',
+                'failsafe': 'DROP (RAM only)', 'gps_required': False}
+    return {'ready': False, 'message': 'Start will prepare indoor settings over FC USB. No reboot needed.'}
+
+
+def probe_video(host):
+    """Read stream availability; an HTTP player page alone also exists without video."""
+    connection = http.client.HTTPConnection(host, 8888, timeout=2)
+    try:
+        url = f'http://{host}:8888/fpv1/index.m3u8'
+        for _ in range(4):
+            parsed = urlsplit(url)
+            connection.request('GET', parsed.path + ('?' + parsed.query if parsed.query else ''))
+            response = connection.getresponse()
+            if response.status not in (301, 302, 303, 307, 308):
+                return response.status == 200 and response.read(8192).lstrip().startswith(b'#EXTM3U')
+            # MediaMTX adds an HLS session via a redirect. Keep probes on this source.
+            location = response.getheader('Location')
+            if not location:
+                return False
+            url = urljoin(url, location)
+            target = urlsplit(url)
+            if (target.scheme != 'http' or target.hostname != host or target.port != 8888
+                    or not target.path.startswith('/fpv1/') or target.username or target.password):
+                return False
+            connection.close()
+        return False
+    except (OSError, ValueError, http.client.HTTPException):
+        return False
+    finally:
+        connection.close()
+
+
 class Console:
     def __init__(self):
         self.lock = threading.RLock()
@@ -72,18 +109,19 @@ class Console:
         self.hid = {'connected': False, 'axes': {}, 'buttons': {}, 'channels': [], 'enabled': False}
         self.fc = {'connected': False, 'channels': [], 'error': 'Looking for the FC'}
         self.pi = {'connected': False, 'checking': False, 'error': 'Check the relay connection'}
+        self.video = {'available': False, 'updated': None}
         self.job = {'busy': False, 'message': ''}
         self.session = {'active': False, 'state': 'idle', 'message': 'Ready when you are', 'frames': 0}
         self.logs = []
         self.fc_enabled = True
         self.monitor = None
-        self.arm_profile = {'ready': False, 'message': 'Prepare the FC over USB before its first switch test'}
-        self.restore_needed = ARM_BACKUP.exists()
+        self.arm_profile = saved_arm_profile()
+        self.restore_needed = ARM_BACKUP.exists() and not self.arm_profile['ready']
         self.last_ui = time.monotonic()
         self.session_thread = None
         WORK.mkdir(parents=True, exist_ok=True)
         os.chmod(WORK, 0o700)
-        for target in (self.read_hid, self.read_fc, self.watchdog):
+        for target in (self.read_hid, self.read_fc, self.read_video, self.watchdog):
             threading.Thread(target=target, daemon=True).start()
 
     def log(self, text, level='info'):
@@ -94,11 +132,27 @@ class Console:
     def snapshot(self):
         with self.lock:
             self.last_ui = time.monotonic()
-            return copy.deepcopy({'settings': self.settings, 'mapping': self.mapping,
+            result = copy.deepcopy({'settings': self.settings, 'mapping': self.mapping,
                                   'hid': self.hid, 'fc': self.fc, 'pi': self.pi, 'job': self.job,
+                                  'video': self.video,
                                   'session': self.session, 'logs': self.logs,
                                   'arm_profile': self.arm_profile,
                                   'fc_enabled': self.fc_enabled, 'token': self.token})
+            if result['fc'].get('connected') and time.time() - result['fc'].get('updated', 0) > 2:
+                result['fc'] = {'connected': False, 'channels': [], 'error': 'FC USB connection is being recovered'}
+            return result
+
+    def read_video(self):
+        while not self.closing.is_set():
+            with self.lock:
+                host = self.settings['host']
+                watching = time.monotonic() - self.last_ui < 10
+            if watching:
+                available = probe_video(host)
+                with self.lock:
+                    if self.settings['host'] == host:
+                        self.video = {'available': available, 'updated': time.time()}
+            self.closing.wait(5)
 
     def save(self):
         private_json(SETTINGS, {'settings': self.settings, 'mapping': self.mapping})
@@ -157,8 +211,10 @@ class Console:
                     if self.arm_profile.get('ready') and ARM_BACKUP.exists():
                         saved = json.loads(ARM_BACKUP.read_text())
                         if not monitor.profile_matches(bytes.fromhex(saved['bench']), bytes.fromhex(saved['gps_bench'])):
+                            saved['verified'] = False
+                            private_json(ARM_BACKUP, saved)
                             self.arm_profile = {'ready': False, 'message': 'FC setup changed or power-cycled. Prepare indoor arming again.'}
-                if self.restore_needed and not self.session['active']:
+                if self.restore_needed and not self.session['active'] and not self.job['busy']:
                     self.restore_arm_profile()
                 snapshot = monitor.snapshot()
                 with self.lock:
@@ -166,7 +222,7 @@ class Console:
                 if snapshot['armed'] and self.session.get('kind') != 'arming':
                     self.stop('FC reports armed; bench output stopped')
                 self.closing.wait(.12)
-            except (OSError, ValueError, TimeoutError) as exc:
+            except (OSError, ValueError, TimeoutError, termios.error) as exc:
                 if monitor:
                     monitor.close()
                     monitor = None
@@ -268,10 +324,16 @@ print('Receiver installed and key ready. No RC output started.')
         if not monitor or not self.fc_enabled:
             raise ValueError('Connect FC USB and enable its connection to prepare the indoor arming test')
         if ARM_BACKUP.exists():
+            saved = json.loads(ARM_BACKUP.read_text())
+            if saved.get('verified') and monitor.path == saved['device'] and monitor.profile_matches(bytes.fromhex(saved['bench']), bytes.fromhex(saved['gps_bench'])):
+                self.arm_profile = {'ready': True, 'message': 'Indoor setup verified · no GPS fix required',
+                                    'failsafe': 'DROP (RAM only)', 'gps_required': False}
+                self.restore_needed = False
+                return
             self.restore_arm_profile()
         original, bench, gps_original, gps_bench = monitor.bench_profile()
         private_json(ARM_BACKUP, {'original': original.hex(), 'bench': bench.hex(), 'device': monitor.path,
-                                 'gps_original': gps_original.hex(), 'gps_bench': gps_bench.hex()})
+                                 'gps_original': gps_original.hex(), 'gps_bench': gps_bench.hex(), 'verified': False})
         self.restore_needed = False
         try:
             monitor.set_gps_rescue(gps_bench)
@@ -284,6 +346,9 @@ print('Receiver installed and key ready. No RC output started.')
                     raise ValueError('GPS arming blocker did not clear')
                 time.sleep(.1)
             monitor.set_failsafe(bench)
+            saved = json.loads(ARM_BACKUP.read_text())
+            saved.update(verified=True, verified_at=time.time())
+            private_json(ARM_BACKUP, saved)
             self.arm_profile = {'ready': True, 'message': 'Indoor setup ready · no GPS fix required · USB can be unplugged',
                                 'failsafe': 'DROP (RAM only)', 'gps_required': False}
             self.log('FC bench setup verified: arming without GPS enabled and DROP failsafe in RAM; original settings backed up.')
@@ -294,11 +359,15 @@ print('Receiver installed and key ready. No RC output started.')
     def restore_arm_profile(self):
         monitor = self.monitor
         if not monitor or not self.fc_enabled:
-            raise ValueError('Reconnect FC USB to restore, or power-cycle the FC to reload its saved settings')
+            raise ValueError('Reconnect FC USB to restore the original settings live. No reboot needed.')
         if ARM_BACKUP.exists():
             saved = json.loads(ARM_BACKUP.read_text())
             if saved['device'] != monitor.path:
                 raise ValueError('Connect the same FC to restore the saved failsafe')
+            saved['verified'] = False
+            private_json(ARM_BACKUP, saved)
+            self.arm_profile = {'ready': False, 'message': 'Restoring original settings over USB…'}
+            self.restore_needed = True
             monitor.set_failsafe(bytes.fromhex(saved['original']))
             if 'gps_original' in saved:
                 monitor.set_gps_rescue(bytes.fromhex(saved['gps_original']))
@@ -306,6 +375,41 @@ print('Receiver installed and key ready. No RC output started.')
         self.restore_needed = False
         self.arm_profile = {'ready': False, 'message': 'Original flight failsafe restored; prepare again for indoor arming'}
         self.log('Original FC failsafe restored and read back')
+
+    def arm_setup(self):
+        """One Start action prepares dependencies, then waits for the operator."""
+        self.session.update(state='preparing', message='Checking and preparing the relay…')
+        self.prepare_pi()
+        if self.stop_event.is_set():
+            return False
+        if self.monitor and self.fc.get('connected'):
+            self.session.update(message='Checking indoor FC settings…')
+            self.prepare_arm_profile()
+        while not self.stop_event.is_set():
+            if time.time() - self.session['started'] > 90:
+                raise ValueError('Setup window ended. Click Start again when ready; no reboot needed.')
+            if not self.arm_profile.get('ready') or self.restore_needed:
+                self.session.update(state='waiting', message='Connect FC USB once; indoor settings will prepare automatically.')
+                if not self.fc_enabled:
+                    self.fc_enabled = True
+                if self.monitor and self.fc.get('connected'):
+                    self.prepare_arm_profile()
+                else:
+                    self.stop_event.wait(.2)
+                    continue
+            if not self.hid.get('connected'):
+                message = 'Connect the TX15 in USB joystick mode.'
+            elif self.hid['channels'][2] > 210:
+                message = 'Lower throttle fully. Nothing is being transmitted yet.'
+            elif self.hid['enabled']:
+                message = 'Move SA to low/off. Then wait for the green ready message.'
+            elif self.fc.get('connected') and self.fc.get('armed'):
+                message = 'FC reports armed. Disarm before starting another test.'
+            else:
+                return True
+            self.session.update(state='waiting', message=message)
+            self.stop_event.wait(.1)
+        return False
 
     def video_action(self, operation):
         if operation == 'bitrate':
@@ -344,29 +448,22 @@ print('Video restarted; Alfa interface included for WebRTC')
                 raise ValueError('Unknown bench test')
             if self.session['active'] or self.job['busy']:
                 raise ValueError('An operation is already running')
-            if not self.pi.get('connected'):
+            if kind != 'arming' and not self.pi.get('connected'):
                 raise ValueError('Check the relay connection first')
             if kind != 'arming' and (not self.fc.get('connected') or self.fc.get('armed') or not self.fc.get('sbus') or time.time() - self.fc.get('updated', 0) > 1):
                 raise ValueError('Connect the disarmed SBUS flight controller over USB')
-            if kind == 'arming':
-                if not self.arm_profile.get('ready') or self.restore_needed:
-                    raise ValueError('Prepare indoor arming with FC USB connected first')
-                if not self.hid['connected'] or self.hid['enabled'] or self.hid['channels'][2] > 210:
-                    raise ValueError('Begin with the TX15 connected, SA low/off and throttle fully down')
-                if self.fc.get('connected') and self.fc.get('armed'):
-                    raise ValueError('Disarm before starting the switch test')
             if kind == 'joystick':
                 if not self.hid['connected'] or not self.hid['enabled']:
                     raise ValueError('Set SA to the highlighted enable position')
                 if self.hid['channels'][2] > 210:
                     raise ValueError('Move throttle fully down before starting')
-            if not (WORK / 'control.key').exists() or not self.pi.get('key'):
+            if kind != 'arming' and (not (WORK / 'control.key').exists() or not self.pi.get('key')):
                 raise ValueError('Use Prepare relay first; the Pi key must be recreated after reboot')
             self.stop_event.clear()
             self.last_ui = time.monotonic()
             self.session = {'active': True, 'state': 'starting', 'kind': kind,
                             'message': 'Connecting the control receiver', 'frames': 0,
-                            'started': time.time(), 'seconds': 4 if kind == 'synthetic' else 30 if kind == 'arming' else self.settings['seconds']}
+                            'started': time.time(), 'seconds': 4 if kind == 'synthetic' else 90 if kind == 'arming' else self.settings['seconds']}
             private_json(WORK / 'joystick.json', self.mapping)
             self.session_thread = threading.Thread(target=self.run_session, args=(kind,), daemon=True)
             self.session_thread.start()
@@ -378,9 +475,15 @@ print('Video restarted; Alfa interface included for WebRTC')
         messages = []
         error = None
         started = time.time()
+        cancelled_before_output = False
+        ending = None
         try:
+            if kind == 'arming' and not self.arm_setup():
+                cancelled_before_output = True
+                return
             host = self.settings['host']
-            duration = 4 if kind == 'synthetic' else 30 if kind == 'arming' else self.settings['seconds']
+            duration = 4 if kind == 'synthetic' else 60 if kind == 'arming' else self.settings['seconds']
+            self.session.update(started=time.time(), seconds=duration, state='starting', message='Connecting the receiver…')
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as route:
                 route.connect((host, 14601))
                 source = route.getsockname()[0]
@@ -388,9 +491,9 @@ print('Video restarted; Alfa interface included for WebRTC')
                               f'python3 -m relay.sbus_bench --key /run/ascent-sbus-bench.key '
                               f'--bind {host} --peer {source} --seconds {duration + 5} --transmit --sbus-wired')
             if kind == 'arming':
-                remote_command = (f'cd /opt/ascent-relay && sudo timeout --kill-after=2 40 '
+                remote_command = (f'cd /opt/ascent-relay && sudo timeout --kill-after=2 70 '
                                   f'python3 -m relay.arm_test receiver --key /run/ascent-sbus-bench.key '
-                                  f'--bind {host} --peer {source} --seconds 35 --props-off')
+                                  f'--bind {host} --peer {source} --seconds 65 --props-off')
             remote = subprocess.Popen(SSH + ['-o', f'HostName={host}', '-o',
                                             'HostKeyAlias=ascent-relay.local', 'ascent-pi', remote_command],
                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -407,11 +510,9 @@ print('Video restarted; Alfa interface included for WebRTC')
                         ready.set()
                     elif state == 'accepted':
                         with self.lock:
-                            message = ('SA high → ARM · automatically ends within two seconds' if entry.get('arm_requested')
-                                       else 'Hold SA low while the receiver recovers…' if entry['frames'] < 50
-                                       else 'Ready — move SA high to test ARM') if kind == 'arming' else 'Live stick transport · ARM blocked'
-                            self.session.update(state='live', message=message,
-                                                frames=entry['frames'])
+                            if kind != 'arming' or entry.get('arm_requested'):
+                                self.session.update(state='live', message='ARM requested · automatic cutoff in two seconds' if kind == 'arming' else 'Live stick transport · ARM blocked')
+                            self.session['frames'] = entry['frames']
                     elif state in ('loss_latched', 'stopped'):
                         with self.lock:
                             self.session.update(state='stopping', frames=entry.get('frames', 0),
@@ -435,17 +536,34 @@ print('Video restarted; Alfa interface included for WebRTC')
                 command += ['--synthetic']
             if kind == 'arming':
                 command = [sys.executable, '-m', 'relay.arm_test', 'sender', '--key', str(WORK / 'control.key'),
-                           '--host', host, '--seconds', '30', '--props-off',
+                           '--host', host, '--seconds', '60', '--props-off',
                            '--joystick', '/dev/input/by-id/' + self.hid['device'], '--mapping', str(WORK / 'joystick.json')]
             sender = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True)
+            sender_lines = []
+            def sender_log():
+                for line in sender.stdout:
+                    sender_lines.append(line)
+                    try:
+                        event = json.loads(line)
+                        if kind == 'arming' and event.get('state') == 'guidance':
+                            with self.lock:
+                                self.session.update(state=event['phase'], message=event['message'])
+                        elif event.get('state') == 'interlock':
+                            self.log(event.get('message', 'Control interlock'), 'error')
+                    except ValueError:
+                        self.log(line.strip(), 'error')
+            sender_reader = threading.Thread(target=sender_log, daemon=True)
+            sender_reader.start()
             samples = []
             while sender.poll() is None and not receiver_done.is_set() and not self.stop_event.wait(.1):
                 with self.lock:
                     samples.append({'t': round(time.time() - started, 3), 'fc': copy.deepcopy(self.fc)})
             if sender.poll() is None:
                 sender.terminate()
-            output, _ = sender.communicate(timeout=3)
+            sender.wait(timeout=3)
+            sender_reader.join(timeout=1)
+            output = ''.join(sender_lines)
             for line in output.splitlines():
                 try:
                     event = json.loads(line)
@@ -486,10 +604,14 @@ print('Video restarted; Alfa interface included for WebRTC')
                     except subprocess.TimeoutExpired:
                         process.kill()
             with self.lock:
+                final_message = 'Cancelled · no ARM command sent' if cancelled_before_output else (
+                    'Two-second test complete. Lower SA and click Test again.' if ending == 'arm_limit' else
+                    'SA lowered · disarm frames sent. Click Test again when ready.' if ending == 'sa_low' else
+                    'Stopped · disarm frames sent. Click Test again when ready.')
                 self.session.update(active=False, state='error' if error else 'stopped',
-                                    message=error or ('Test ended · ARM low sent · return SA low before repeating' if kind == 'arming' else 'Session ended · output stopped'), ended=time.time())
+                                    message=error or (final_message if kind == 'arming' else 'Session ended · output stopped'), ended=time.time())
             if kind == 'arming':
-                self.log(error or 'Arming test ended; disarm frames sent. Indoor setup stays active until Restore or FC power-cycle.', 'error' if error else 'info')
+                self.log(error or final_message, 'error' if error else 'info')
             else:
                 self.log(error or 'Bench session ended. ARM remained blocked.', 'error' if error else 'info')
 
@@ -512,6 +634,7 @@ print('Video restarted; Alfa interface included for WebRTC')
                 settings = validate_settings(data)
                 if settings['host'] != self.settings['host']:
                     self.pi = {'connected': False, 'error': 'Check the new relay address'}
+                    self.video = {'available': False, 'updated': None}
                 self.settings = settings
                 self.save()
                 self.log('Connection and video preferences saved')
