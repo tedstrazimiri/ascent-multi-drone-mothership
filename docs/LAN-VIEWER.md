@@ -24,3 +24,7 @@ systemctl is-active ascent-mediamtx.service ascent-video@fpv1.service
 ```
 
 Restoring the backed-up configuration and restarting MediaMTX removes LAN playback. A restart briefly interrupts video and the enabled publisher reconnects automatically.
+
+## Address troubleshooting
+
+The bare WebRTC root (`http://192.168.1.104:8889/`) returns 404 because MediaMTX has no homepage there. Include `/fpv1/`; `/fpv1` also redirects correctly. On 2026-09-29, following an owner-reported 404, both full WebRTC and HLS URLs returned HTTP 200 and visibly played the camera/OSD in the laptop browser. Both Pi services remained active. The exact failing device/address was requested; no server outage or required restart was established. Private HTTP check evidence: `work/lan-viewer-404-check.json`.
