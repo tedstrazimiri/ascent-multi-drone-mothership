@@ -11,6 +11,8 @@ The default **Live** view puts FPV video first. The right-hand control deck move
 - **LINK**: four-second synthetic roll check, all AUX low.
 - **STOP**: stops the current test. An additional Stop bar appears on other tabs or when the primary controls scroll out of view. Escape also stops an active test and exits expanded view.
 
+WebRTC is the saved control-viewing transport after the latency audit; HLS remains a more-buffered compatibility fallback. See [latency findings and next tests](LATENCY.md).
+
 Video opens automatically when the source playlist is available. Power pauses/resumes playback, the circular arrow reconnects the player, and the corner icon expands the video while keeping test controls accessible. One player is mounted at a time; setup tabs suspend it. Availability checks follow MediaMTX session redirects on the configured source only, retry after source loss and do not emit RC traffic. “Stream available” reports the source, not proof that the browser has decoded a frame.
 
 FC state, voltage and RX bars come from USB readback. Missing/disconnected data shows unknown or dashes. PI RTT is the last measured network round trip, not video latency; use Link → Check to refresh it. Format and bitrate in the video footer are configured targets, not measured quality. Full events remain available in the collapsed bottom activity bar.
