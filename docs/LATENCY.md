@@ -1,5 +1,7 @@
 # Latency audit — 2026-09-29
 
+**Deferred:** the owner requested a documentation closeout before further latency work. The findings below are preserved; proposed changes are not deployed or scheduled. Resume from [PROJECT-HANDOFF.md](PROJECT-HANDOFF.md) next session.
+
 ## Verified live
 
 - Dashboard initially used HLS. One browser sample had playhead15.563929s, latest seekable point16.2s and buffered end15.999999s. Separation to the seekable edge was636ms, **not** a measurement of camera-to-screen latency. Camera/RF/capture/encoding delay is additional and unmeasured.

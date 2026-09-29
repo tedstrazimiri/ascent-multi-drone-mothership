@@ -39,3 +39,23 @@ ssh ascent-pi 'cloud-init status --long; systemctl status ascent-firstboot --no-
 ```
 
 The exact capture device is configured remotely after it is connected and enumerated. Synthetic video is deliberately labelled so it cannot be mistaken for a camera feed.
+
+## Live bench differences and recovery
+
+The original SD write/readback and physical first boot passed; see [VERIFICATION.md](VERIFICATION.md). **The original staged image is not a snapshot of the current bench.** No new image or card was built during the documentation closeout. Rebuilding the image from current source stages that source, but does not automatically copy all live settings or install the separate pigpio dependency.
+
+| Layer | Original image / reusable default | Current bench and recovery reference |
+|---|---|---|
+| UART | Original staged image predates the PL011 update | Live `disable-bt` overlay selects PL011; current installer/personalizer includes it. `configure-uart.sh` changes require a Pi reboot, unlike routine dashboard tests. |
+| Video source | Labelled synthetic `video-fpv1.json` | MacroSilicon MJPEG 720p30 using [capture profile](../config/video-macrosilicon-720p30.json); live target 1 Mbps, reusable profile 3 Mbps. |
+| MediaMTX | Loopback-only RTSP | [LAN profile](../config/mediamtx-lan.yml) enables WebRTC/HLS and field/house read CIDRs; apply through [LAN viewer procedure](LAN-VIEWER.md). |
+| Publisher unit | Original image predates clean-EOF recovery | Current [unit](../systemd/ascent-video@.service) uses `Restart=always`; installed on live Pi. |
+| GPIO dependency | Not provisioned by generic first boot | [install-pigpio-bench.sh](../scripts/install-pigpio-bench.sh) installs the pinned private library on the Pi, with compiler/make/curl prerequisites; no daemon or RC startup. |
+| Network | Private first-boot DHCP/selected Wi-Fi setup | Field `ascent-field` on Alfa wlan1 plus house fallback were configured later. Preserve/recreate private NetworkManager profiles; passwords are not in Git. |
+| RC receiver/key | No persistent physical RC service | Dashboard Prepare relay deploys receivers and a private key in `/run`; repeat after reboot. No output until an explicit finite test. |
+| Laptop UI | Separate from Pi image | `python3 scripts/install-console.py` installs/starts the user-local dashboard and launcher; preserve private `local-console.json` and `work/console/`. |
+| FC settings | Separate physical controller | Firmware/tune and saved battery/buzzer changes are not part of the Pi image. Indoor profile is RAM-only; see [FC setup](FC-2026-SETUP.md) and [Control Room](CONTROL-ROOM.md). |
+
+For a replacement card, preserve the private recovery artifacts listed in [PROJECT-HANDOFF.md](PROJECT-HANDOFF.md), then follow the build steps with a newly verified target/write plan. Do not reuse an old device path as proof of card identity or distribute the personalized image. The initial SD-replacement authorization described above records that completed operation; it is not an instruction to erase another device during a later session.
+
+After boot, establish pinned SSH and first-boot readiness, apply the intended live profiles/dependencies above, then verify video and explicit finite control tests separately. `install-pi.sh` preserves existing `/etc/ascent-relay` JSON/YAML configuration and does not start/restart video services itself; `firstboot.sh` explicitly enables the initial video services. A reinstall alone is not a complete restoration or a verified end-to-end test.

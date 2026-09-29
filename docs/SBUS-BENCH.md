@@ -1,4 +1,6 @@
-# Current physical control experiment
+# Physical control experiment history
+
+> Start with [PROJECT-HANDOFF.md](PROJECT-HANDOFF.md) and the [Control Room](CONTROL-ROOM.md). The experiments below are chronological: later live HID and bounded owner-operated arming passed. Old “next test” instructions and addresses record earlier checkpoints; they do not request another trial now. GPIO14/pin 8 → VRX SBUS is the working route. Latency work is paused for the next session.
 
 2026-09-29: Owner confirms VRX UART mode **ELRS TT**, common VRX/Pi ground, and props removed. Owner explicitly declined voltage measurement; signal-level compatibility remains unverified. The camera/OSD path works. The FC is configured for standard SBUS on UART2, with AETR channel mapping and ARM on AUX1 high.
 

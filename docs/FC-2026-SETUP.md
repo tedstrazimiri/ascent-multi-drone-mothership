@@ -1,5 +1,7 @@
 # TAKER H743 configuration after SBUS firmware flash
 
+> This is a chronological configuration/migration record. Later sections supersede early “receiver pending” and “no output sent” statements. Current state: [PROJECT-HANDOFF.md](PROJECT-HANDOFF.md). Live HID and the owner-observed bounded motor test passed; routine indoor prepare/repeat/restore now uses the dashboard without rebooting. The last observed indoor profile remained active in RAM, with the FC disarmed.
+
 Verified 2026-09-28 local / 2026-09-29 UTC. The owner flashed Betaflight **2026.6.2** on **GEPRC_TAKER_H743**. USB MSP reports API 1.48 and compiled SBUS option 4103. The owner explicitly requested FC setup and applying the old flight tune as a starting point.
 
 ## Saved configuration and readback

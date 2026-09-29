@@ -1,4 +1,4 @@
-> Current interactive workflow: [Ascent Control Room](CONTROL-ROOM.md). TX15 is the reference radio; the live HID path and owner-operated two-second SA arming test have now passed. Older steps below record staged bring-up. Current Pi field address: 192.168.8.175.
+> Historical staged bring-up. Use [project handoff](PROJECT-HANDOFF.md) for current wiring/settings and [Ascent Control Room](CONTROL-ROOM.md) for normal operation. Live HID and the owner-operated two-second SA motor test passed. Current route is GPIO14/pin 8 → VRX SBUS; Pi field address is 192.168.8.175; video target is 1 Mbps with WebRTC selected. Older UART instructions and house addresses below are not the current route.
 
 # Bench bring-up
 
@@ -14,7 +14,7 @@ First boot passed on 2026-09-28: `ssh ascent-pi` works, observed Wi-Fi address `
 
 ## HDMI capture
 
-**Current saved configuration (2026-09-28):** the running Pi now uses the MacroSilicon USB capture adapter (`534d:2109`) at `/dev/v4l/by-id/usb-MACROSILICON_USB_Video-video-index0`, MJPEG 1280×720 at 30 fps, and `h264_v4l2m2m` at a requested 3 Mbit/s. The reusable profile is [video-macrosilicon-720p30.json](../config/video-macrosilicon-720p30.json); it has been applied to `/etc/ascent-relay/video-fpv1.json`. The previous synthetic configuration remains backed up as `/etc/ascent-relay/video-fpv1.json.before-hdmi-20260928T225427Z`. Generic image defaults remain synthetic.
+**Initial saved capture configuration (2026-09-28):** MacroSilicon USB capture (`534d:2109`) at `/dev/v4l/by-id/usb-MACROSILICON_USB_Video-video-index0`, MJPEG 1280×720 at 30 fps, `h264_v4l2m2m` at a requested 3 Mbit/s. The reusable [video-macrosilicon-720p30.json](../config/video-macrosilicon-720p30.json) remains 3 Mbit/s; the owner later selected **1 Mbit/s** in the running Pi's `/etc/ascent-relay/video-fpv1.json`. The previous synthetic configuration remains backed up as `/etc/ascent-relay/video-fpv1.json.before-hdmi-20260928T225427Z`. Generic image defaults remain synthetic.
 
 On 2026-09-29, after the owner returned the VRX HDMI cable from the monitor to the capture card, the laptop received the live GT Pro camera picture and Betaflight OSD through the Pi RTSP path. The owner confirms `ELRS TT` and shared VRX/Pi ground. Four finite CRSF UART probes produced no FC channel movement. The dedicated SBUS input subsequently passed a finite disarmed channel test; see [current bench procedure](SBUS-BENCH.md). No persistent RC output is enabled.
 
@@ -22,7 +22,7 @@ Changing the USB cable resolved capture enumeration. Initial capture frames were
 
 This adapter has no USB serial number. With a second identical adapter, use verified `/dev/v4l/by-path` connections to prevent ambiguous identities. `/dev/video1` on this adapter is its metadata node, not the capture stream.
 
-Connect VRX HDMI OUT to an HDMI-to-USB capture adapter and its USB output to a Pi USB 3 socket. Use the VRX's correctly rated independent supply. The Pi HDMI sockets are unused inputs because they cannot receive video. Read labels and HDMI orientation before connecting.
+Connect VRX HDMI OUT to an HDMI-to-USB capture adapter and its USB output to a Pi USB 3 socket. Use the VRX's correctly rated independent supply. The Pi HDMI sockets are outputs and remain unused for capture. Read labels and HDMI orientation before connecting.
 
 Run `bash scripts/probe.sh` in this checkout, or use `v4l2-ctl --list-devices` and `v4l2-ctl -d /dev/v4l/by-id/ACTUAL_DEVICE --list-formats-ext` remotely. Record the actual stable path, input formats, mode and framerate. Replace the placeholder in `/etc/ascent-relay/video-fpv1.json`, set `source` to `v4l2`, and select a supported mode. `encoder: copy` is only allowed with `input_format: h264`. For MJPEG/YUYV select a tested encoder. Restart `ascent-video@fpv1` after editing.
 

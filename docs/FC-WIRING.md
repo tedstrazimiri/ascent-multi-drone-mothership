@@ -1,5 +1,7 @@
 # GT Pro six-pin harness to GEPRC TAKER H743
 
+**Current checkpoint:** the dedicated SBUS path, live HID transport and owner-operated motor start/automatic stop have passed. Pi physical pin 8 / GPIO14 is wired to VRX **SBUS**, not VRX RX. See [project handoff](PROJECT-HANDOFF.md) for current state; the missing-driver section below is historical.
+
 Reviewed 2026-09-28. The owner confirms the Ascent GT Pro is plugged directly into the GEPRC TAKER H7 digital-VTX connector. USB now reports `GEPRC_TAKER_H743`, Betaflight 2026.6.2, after the owner flashed it. The assistant configured and verified receiver/OSD/GPS and migrated the saved tune under the owner's explicit instructions. Documents remain reference evidence. See [current configuration and migration](FC-2026-SETUP.md).
 
 ## Manufacturer evidence
@@ -37,7 +39,7 @@ The owner-reported harness connection is not an independent continuity or voltag
 
 MSP on the **Ports** page supports the VTX OSD connection. **MSP Receiver Mode** selects a different source of stick/channel data; it does not make an SBUS stream on RX2 into an MSP receiver. A real MSP-RC implementation would need actual MSP RC packets and a proven transport to the FC. The current relay does not provide that implementation.
 
-Current readback confirms Serial/SBUS on UART2, UART1 MSP + DisplayPort, and compiled SBUS option 4103. Receiver initialization reports 18 channels, but RXLOSS and zero RX rate remain: this is not yet a working Ascent RC link. Use `serialrx_inverted = OFF` for standard inverted SBUS; the protocol driver already applies normal SBUS inversion. `sbus_baud_fast = OFF` selects standard 100000 baud. See the matching [2026.6.2 SBUS driver](https://github.com/betaflight/betaflight/blob/2026.6.2/src/main/rx/sbus.c).
+Post-flash readback confirmed Serial/SBUS on UART2, UART1 MSP + DisplayPort, and compiled SBUS option 4103. Initially the receiver exposed 18 channels but had zero RX rate; later physical SBUS tests established actual reception and channel movement. Use `serialrx_inverted = OFF` for standard inverted SBUS; the protocol driver already applies normal SBUS inversion. `sbus_baud_fast = OFF` selects standard 100000 baud. See the matching [2026.6.2 SBUS driver](https://github.com/betaflight/betaflight/blob/2026.6.2/src/main/rx/sbus.c).
 
 ## Historical missing-driver diagnosis, before owner flash
 
@@ -55,12 +57,12 @@ The existing configuration is backed up privately in `work/fc-backup-20260929T03
 
 No FC settings were written by the assistant during that diagnosis. Historical private snapshots: `work/fc-after-owner-msp-change.json`, `work/fc-current-serial-ports-v2.json`, `work/fc-serial-sbus-mode-verified.json` and `work/fc-build-options-verified.json`. The former build reported Jan 10 2025, 01:13:49, revision `77d01ba`, Betaflight 4.5.1. These are superseded by the current post-flash evidence.
 
-## Remaining ground-side interface
+## Ground-side interface: implemented SBUS, unresolved UART
 
 The manuals confirm a separate SBUS lead at the VTX/FC end. They do not establish conversion of arbitrary UART input at the VRX into SBUS output at the GT Pro. Selecting UART passthrough is a data-mode selection, not proof of such conversion. The earlier UART-mode recommendation must be read with this limit.
 
-For the planned SBUS route, provide a verified SBUS source to the VRX's SBUS input and observe the GT Pro output/FC channels. The Pi's current ordinary TX/RX wiring is not an SBUS source: standard SBUS requires inverted 100000-baud 8E2 and compatible electrical levels. The independent output interface, VRX voltage, passthrough behavior and loss response still need bench verification. No physical RC output has been enabled.
+The current Pi source generates inverted 100000-baud 8E2 on GPIO14 using pigpio one-shot waveforms. With that lead on the VRX SBUS pin, finite synthetic and live-HID trials produced matching FC channel changes. An ordinary UART byte write would not reproduce this waveform. Signal voltage margins and RF-outage behavior remain unverified; the independent hardware watchdog is future work.
 
-The owner specifically reaffirmed the VRX's dedicated SBUS pin. Use it for this route rather than relying on undocumented UART-to-SBUS conversion. The Pi receives channel values over IP, so it must generate SBUS frames and the appropriate electrical waveform. `relay.protocol.sbus_frame` already packs frames offline; that is separate from a timed, inverted physical output. PL011 with a suitable inversion/interface stage or a suitable MCU can provide the latter. Merely moving the current Pi TX lead to the VRX SBUS pin is not a verified interface.
+The owner specifically reaffirmed the VRX's dedicated SBUS pin and confirmed moving the wire there. The Pi still has to translate IP channel values into packed SBUS and the timed inverted waveform; the VRX passes that stream through the Ascent link. `relay.protocol.sbus_frame` packs it; `relay.sbus_probe`/`relay.sbus_bench` provide the finite physical bench output. See [SBUS evidence](SBUS-BENCH.md) and the [dashboard workflow](CONTROL-ROOM.md). Earlier failed CRSF UART trials do not invalidate this separately proven SBUS route.
 
 Cached Industry guide SHA-256: `64167274f6f595dfe065efc33ec65954b29fc5b9eb838a0a6ed65d562e767eec`; GEPRC guide: `a1832f0a528179e1f295f907bd7aa035a539d87660b2226b1d99b793887f92bb`. Relevant diagrams were rendered and visually inspected.

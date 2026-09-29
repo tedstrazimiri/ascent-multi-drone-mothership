@@ -1,5 +1,7 @@
 # RC transport: DJI O4, Avatar and Ascent
 
+> Historical manufacturer-document review. Its proposed SBUS path was subsequently demonstrated on the bench; see [current handoff](PROJECT-HANDOFF.md) and [physical evidence](SBUS-BENCH.md). The dashed “verify” diagram below records the research-stage proposal, not current implementation status.
+
 Reviewed 2026-09-28 against manufacturer documentation. This is a documentation result, not a hardware test. The prepared Pi SD card was not changed or booted during this review.
 
 ## Finding

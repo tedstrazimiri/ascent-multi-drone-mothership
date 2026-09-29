@@ -29,7 +29,7 @@ Restoring the backed-up configuration and restarting MediaMTX removes LAN playba
 
 The bare WebRTC root (`http://192.168.1.104:8889/`) returns 404 because MediaMTX has no homepage there. Include `/fpv1/`; `/fpv1` also redirects correctly. On 2026-09-29, following an owner-reported 404, both full WebRTC and HLS URLs returned HTTP 200 and visibly played the camera/OSD in the laptop browser. Both Pi services remained active. The exact failing device/address was requested; no server outage or required restart was established. Private HTTP check evidence: `work/lan-viewer-404-check.json`.
 
-## Alfa address — 2026-09-29
+## Historical house-network Alfa address — 2026-09-29
 
 The USB Alfa adapter was present but disconnected; activated it on the existing Wi-Fi network. Its DHCP address is now **192.168.1.105**, preferred route metric500. Onboard .104 remains connected as fallback metric600. Use `http://192.168.1.105:8888/fpv1/` for HLS or port8889 for WebRTC when reaching the Alfa. Both listeners bind the LAN interfaces; read permissions already include this subnet. These DHCP addresses may change.
 
@@ -42,4 +42,6 @@ Subsequent coexistence check passed: one HLS viewer at the .105 address visibly 
 
 Both devices moved to owner-selected SSID `bbbb`: laptop 192.168.8.130 and Pi Alfa wlan1 192.168.8.175, gateway 192.168.8.1. Pinned SSH and Internet connectivity verified. Alfa profile ascent-field uses 5 GHz, autoconnect priority30, power saving disabled, route metric500. Laptop bbbb uses 5 GHz and power saving disabled. Old house profiles remain available; Pi wlan0 is still192.168.1.104/metric600. No credentials are stored in this repository.
 
-Use the Control Room's Bench test → Open live video, or the updated URLs at the top of this page. The owner selected 1 Mbps using the new bitrate control; earlier trials used 3 Mbps. WebRTC candidate interfaces now include wlan1. Capture USB disconnected/re-enumerated repeatedly during this session; FFmpeg exited successfully and the old on-failure unit stayed stopped. The publisher now uses Restart=always so a clean capture EOF also retries. Manual stops remain stopped. Capture hardware/power stability still requires investigation if this recurs.
+Use the Control Room's **Live** view, or the updated URLs at the top of this page. The owner selected 1 Mbps using the bitrate control; earlier trials used 3 Mbps. WebRTC candidate interfaces include wlan1. Capture USB disconnected/re-enumerated repeatedly during testing; FFmpeg exited successfully and the old on-failure unit stayed stopped. The publisher now uses Restart=always so a clean capture EOF also retries. Manual stops remain stopped. Capture hardware/power stability still requires investigation if this recurs.
+
+The later latency audit saved WebRTC as this laptop's preferred player and verified actual 1280×720 playback over UDP in the redesigned dashboard. HLS remains a compatibility fallback. Fresh console defaults still select HLS; the persisted preference is private. See [LATENCY.md](LATENCY.md) for measured findings and [PROJECT-HANDOFF.md](PROJECT-HANDOFF.md) for the paused session state. No camera-to-screen latency value has yet been established.

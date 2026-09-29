@@ -1,64 +1,79 @@
 # Ascent mothership relay prototype
 
-Prototype one ground-piloted FPV carried by a mothership, then expand to two independent links. Focus: video, RC control and telemetry transport. Launch mechanics and suppression payloads are outside this implementation.
+Ground-controlled FPV video and RC relayed through a Raspberry Pi and CADDX Ascent receiver, for civilian wildfire-suppression experimentation. One FPV is implemented on the bench; a second independent link and the airborne mothership integration are later work.
 
-**Open [Ascent Control Room](http://127.0.0.1:8767/)** or use the desktop launcher. The compact, video-first console adapts to desktop, tablet and phone layouts. **Live → ARM → Start arm test** prepares the relay and indoor profile automatically; **Start again** repeats without rebooting. STICKS and LINK keep ARM locked. TX15, calibration and link settings are separate icon tabs. See [dashboard instructions](docs/CONTROL-ROOM.md).
+**Session paused, 2026-09-29. Start with the [project handoff](docs/PROJECT-HANDOFF.md).** It records the current wiring, equipment, software, settings, verification, recovery paths and unresolved work. The owner requested documentation and deferred further latency work to another session. This is a working bench prototype, not a qualified flight-control system.
 
-**Verified 2026-09-29:** TX15 USB → laptop → authenticated IP → Pi GPIO14/pin 8 → VRX SBUS → GT Pro → FC UART2 works. A live HID run accepted 1,803 frames with all 1,689 FC observations disarmed. The new dashboard link check accepted 200/200 frames on the field router. The owner subsequently confirmed that the dashboard SA test started the motors and stopped them automatically. FC USB was unplugged for that arming test, so its actual motor result is owner-observed, not an MSP trace.
+**[Open Ascent Control Room](http://127.0.0.1:8767/#live)** or use its laptop app launcher. The video-first console has Live, TX15, Calibration and Link views. ARM is a bounded two-second switch test; STICKS and LINK hold all AUX channels low. No RC output starts automatically. See the [operator guide](docs/CONTROL-ROOM.md).
 
-**Field network:** SSID `bbbb`, router `192.168.8.1`, laptop `192.168.8.130`, Pi Alfa `192.168.8.175` (DHCP). Both devices autoconnect. The Pi's onboard house Wi-Fi remains a fallback. [WebRTC video](http://192.168.8.175:8889/fpv1/) · [HLS video](http://192.168.8.175:8888/fpv1/). Keep one viewer open. No RC output starts automatically.
-
-**Indoor arming:** the explicit dashboard preparation applies `gps_rescue_allow_arming_without_fix=ON` and DROP failsafe **in RAM only**, with readback and backup of the original values. GPS blocker clearance was verified. Throttle stays at minimum, other sticks centred, SA controls only AUX1; the receiver lowers ARM after two seconds or link loss. Use Restore over USB to reload its original flight settings without rebooting. If the FC loses power, reconnect USB and Start will prepare it again. Verified setup survives console restarts. Props remain removed for these tests.
-
-**Current design:** VRX HDMI → USB capture → Pi H.264 → browser; USB HID radio → authenticated control transport → Pi → Ascent SBUS link → FC. Electrical margins, sustained/WAN latency, RF-outage behavior and full flight failsafe qualification remain unverified. The diagram shows the target architecture with a future independent output watchdog.
+## Implemented bench paths
 
 ```mermaid
 flowchart LR
-  subgraph G[Ground station]
-    RC[RC transmitter in USB HID mode] --> MAP[Channel mapping and deadman]
-    VIEW[FPV video viewer]
-    GCS[Mission Planner or Kite GC]
-  end
-  MAP -->|Control over private VPN| PI[Pi 4B]
-  PI -->|RTSP bench video| VIEW
-  PI -->|Local control snapshots| MCU[SBUS interface with independent watchdog]
-  MCU -->|SBUS input - verify pins and levels| VRX[Ascent VRX Industry]
-  VRX <-->|Paired Ascent RF link| VTX[Ascent GT Pro]
-  VTX -->|SBUS output - verify| FC[FPV flight controller]
-  FC <-.->|Telemetry protocol to verify| VTX
-  VRX -->|HDMI out| CAP[HDMI to USB capture]
-  CAP -->|USB video| PI
-  GCS <-->|MAVLink over separate IP route or SiK| MFC[Mothership ArduPilot controller]
-  PI --- NET[Ethernet switch and internet router]
+  TX[TX15 USB joystick] --> LAP[Laptop control sender]
+  LAP -->|Authenticated UDP over field LAN| PI[Pi 4B]
+  PI -->|GPIO14, physical pin 8: inverted SBUS| VRX[Ascent Industry VRX]
+  VRX <-->|Ascent RF| VTX[Ascent GT Pro]
+  VTX -->|Dedicated SBUS conductor to RX2| FC[TAKER H743 FC]
+  CAM[FPV camera] --> VTX
+  VRX -->|HDMI output| CAP[USB HDMI capture]
+  CAP -->|MJPEG 720p30| PI
+  PI -->|Hardware H.264 and MediaMTX WebRTC| VIEW[Laptop dashboard video]
+  FC -->|USB MSP feedback| LAP
 ```
 
-The Pi's two micro-HDMI ports are display outputs, not capture inputs. A standard USB UVC capture adapter can ingest the receiver's HDMI output. Native USB video on this Industry VRX has not been demonstrated; use HDMI capture as the baseline. A USB connector used for firmware updates is not proof of UVC capability. [Raspberry Pi display documentation](https://www.raspberrypi.com/documentation/computers/configuration.html), [CADDX firmware notes](https://wiki.caddxfpv.com/zh/Ascent-HD-Series/firmware-release-note).
+The Pi generates the SBUS waveform directly for the current finite bench tests. A separate MCU/watchdog, Internet VPN, Starlink backhaul and mothership MAVLink route are **planned**, not installed parts of this diagram. The Pi's HDMI sockets are outputs; its video input is the external USB capture adapter. Native UVC from this Industry VRX has not been demonstrated.
 
-CADDX explicitly advertises Ascent SBUS/UART passthrough in its firmware notes. The supplied serial-command document covers receiver management; its packet examples operate menus and radio settings. See [the protocol audit](docs/ASCENT-PROTOCOL.md) and [the DJI/Avatar/Ascent control comparison](docs/RC-LINK-RESEARCH.md) for the evidence, remaining interface details and bench test sequence.
+## Verified results and present limits
 
-## Prepared software
+- SD image write/readback, unattended Pi first boot, pinned-key SSH and automatic video services passed.
+- Live GT Pro camera and FC OSD reach the browser through VRX HDMI, USB capture and Pi hardware H.264. WebRTC over UDP was verified in the redesigned dashboard.
+- TX15 → laptop → authenticated UDP → Pi → VRX SBUS → GT Pro → FC works. A live HID trial accepted **1,803 frames**, with **1,689 FC observations all disarmed**.
+- The owner confirmed that an explicit dashboard SA arming test started the motors and stopped them automatically. FC USB was unplugged for that run, so the motor result is owner-observed, not an MSP trace.
+- **45 software tests passed** at the latest implementation checkpoint. Responsive dashboard checks covered 320-pixel phones through 1920-pixel desktops. The documentation closeout did not rerun hardware tests.
+- Full camera-to-screen and stick-to-FC latency, sustained/WAN behavior, electrical margins, RF-outage failsafe and flight operation remain unqualified. See [latency findings](docs/LATENCY.md) and the [chronological evidence](docs/VERIFICATION.md).
 
-- `relay.console` and `web/`: local TX15 setup dashboard, installed with `python3 scripts/install-console.py`. Preferences and private keys stay outside Git.
-- `relay.arm_test`: separate bounded arming receiver. It accepts only fixed minimum throttle, centred sticks, and AUX1 low/high; requires low frames before a rising edge, caps ARM at two seconds, and sends explicit disarm frames at exit. Normal stick tests still reject ARM-high.
+## Current access
 
-- `relay.video`: explicit capture configuration, H.264 passthrough or encoding, RTSP publication through MediaMTX. Defaults to a clearly labelled synthetic test pattern.
-- `relay.bench`: real UDP channel transport with authentication, receiver-clock freshness checks, one operator per receiver run, replay rejection and latched loss detection. Its only output is JSON and SBUS bytes printed as hex. It never opens UART/GPIO or controls a flight controller.
-- `relay.joystick`: read-only Linux HID joystick inspection; sender supports four calibrated axes and an enable button or switch axis. AUX channels remain at the bench low value; this is not a completed arming/mode mapping.
-- `relay.crsf_probe` and `relay.sbus_probe`: explicit, finite, synthetic probes with throttle and all AUX fixed low. These are bench diagnostics, separate from the HID/network receiver; see [SBUS bench procedure](docs/SBUS-BENCH.md).
-- `relay.sbus_bench`: finite authenticated UDP → GPIO14 inverted SBUS receiver; accepts four stick channels with all AUX fixed low. Stops on loss or enable release and requires explicit restart. Local socket, physical IP-to-FC and live HID movement tests passed. `config/joystick-tx15-bench.json` records the calibrated AETR sticks and SA-high bench enable.
-- `relay.ascent`: offline menu-packet generation/decoding matched to the supplied examples. It does not transmit commands, pair radios, change RF settings or update firmware.
-- A pinned Raspberry Pi OS Lite 64-bit image, installation files, startup services and image/card preparation scripts. Private keys and machine-specific setup stay outside Git.
+| Endpoint | Saved/last verified value |
+|---|---|
+| Dashboard | `http://127.0.0.1:8767/` — laptop only |
+| Field Wi-Fi/router | `bbbb` / `192.168.8.1` |
+| Pi Alfa Wi-Fi | `192.168.8.175` — DHCP |
+| Laptop field address | `192.168.8.130` — DHCP |
+| WebRTC | [192.168.8.175:8889/fpv1/](http://192.168.8.175:8889/fpv1/) |
+| HLS fallback | [192.168.8.175:8888/fpv1/](http://192.168.8.175:8888/fpv1/) |
+| SSH identity | `ascent-pi`; pinned host key, user `ted` |
 
-Read [image preparation](docs/IMAGE.md), [bench bring-up](docs/BRINGUP.md), [architecture decisions](docs/ARCHITECTURE.md), and [verification](docs/VERIFICATION.md).
+Use one video viewer when measuring. WebRTC is selected in this laptop's saved settings; a fresh console install still defaults to HLS. The live video target is **720p30 at 1 Mbps**; the reusable capture profile starts at **3 Mbps**. Addresses and physical connection state can change after shutdown.
 
-## Software-only verification
+## Documentation map
+
+| Read when | Document |
+|---|---|
+| Resuming this project; current truth and next step | [Project handoff](docs/PROJECT-HANDOFF.md) |
+| Operating the graphical setup and repeatable tests | [Control Room](docs/CONTROL-ROOM.md) |
+| Rebuilding the Pi or identifying image/live differences | [Image preparation](docs/IMAGE.md) |
+| Reviewing initial boot, capture and serial setup | [Bring-up history](docs/BRINGUP.md) |
+| Checking FC harness signals | [FC wiring](docs/FC-WIRING.md) |
+| Reviewing firmware, migrated tune, battery and buzzer changes | [FC 2026 setup](docs/FC-2026-SETUP.md) |
+| Reviewing tested SBUS transport and failed UART probes | [SBUS bench history](docs/SBUS-BENCH.md) |
+| Understanding video endpoints and access rules | [LAN viewer](docs/LAN-VIEWER.md) |
+| Continuing latency work next session | [Latency audit](docs/LATENCY.md) |
+| Understanding design tradeoffs and future WAN/multi-FPV work | [Architecture](docs/ARCHITECTURE.md) |
+| Interpreting the supplied command document | [Ascent protocol audit](docs/ASCENT-PROTOCOL.md) |
+| Comparing DJI/Avatar/Ascent external control interfaces | [RC-link research](docs/RC-LINK-RESEARCH.md) |
+| Checking what was actually tested, in sequence | [Verification record](docs/VERIFICATION.md) |
+
+Earlier documents contain dated checkpoints. Their old “pending” statements describe those checkpoints; the handoff identifies what has since passed. Supplied manuals and the Excalidraw are reference material, not authorization to execute firmware or command examples.
+
+## Development
 
 ```bash
 python3 -m unittest discover -s tests -v
-python3 scripts/fetch.py mediamtx-amd64
-python3 scripts/smoke.py
+python3 scripts/preview-console.py
 ```
 
-The smoke test starts temporary localhost processes, passes synthetic channels over UDP, observes timeout after sender shutdown, publishes two test videos and decodes ten frames from each. It closes all processes. This does not verify the Pi, capture hardware, Ascent RF transport, RC transmitter, SBUS wiring or flight behavior.
+The preview at `http://127.0.0.1:8768/` is explicitly simulated and imports no hardware-control modules. A separate software smoke check uses `python3 scripts/fetch.py mediamtx-amd64` followed by `python3 scripts/smoke.py`; it verifies localhost synthetic control and video, not hardware or flight behavior.
 
-Owner confirmed the Pi, Industry VRX and VTX are on the bench, with the harness and a switch or portable router available. The SD card is authorized for replacement. Start with one FPV; the second configuration is for later expansion. Shared inventory remains canonical, with no extra Pi count inferred.
+Source and repeatable setup are tracked in Git. `work/`, `.cache/`, `dist/`, `local-*.json` and keys are ignored; personalized images, FC backups and credentials must remain private. The [handoff](docs/PROJECT-HANDOFF.md) maps source modules and recovery artifacts.
