@@ -114,3 +114,20 @@ The owner flashed the correct GEPRC_TAKER_H743 target and requested configuratio
 - Owner reports VRX SBUS connected to Pi GPIO14 / physical pin 8. Read-only Pi check shows ALT0 TXD0 idle high and no UART owner; video services remain active. Asked for signal disconnection and VRX-side voltage measurement. Direct inverted GPIO waveforms via pigpio are a potential alternative to a UART inverter, not an installed or verified output path.
 
 Evidence: `work/fc-postflash-backup-20260929T033756Z/`, `work/fc-2026-sbus-setup-responses/`, `work/fc-2026-tune-responses/`, `work/fc-2026-configured-backup/`, `work/fc-2026-setup-verified.json`, and `work/fc-2026-final-msp.json`.
+
+
+## Live camera, bounded RC probes and bench mute — 2026-09-29
+
+- Owner confirms `ELRS TT` and shared VRX/Pi ground, and explicitly declines voltage measurement. Electrical compatibility remains unverified.
+- After VRX HDMI returned from the monitor to the Pi capture card, `work/vrx-reconnected.jpg` showed the actual GT Pro camera image and Betaflight OSD through RTSP. This supersedes the earlier transmitter-disconnected checkpoint. The Ascent 85 ms overlay is not a measured total camera-to-screen delay.
+- Installed Pi `python3-serial` 3.5-2 for bounded CRSF probes. Four 4-second tests at 420000, 115200, 400000 and 416666 baud completed with 195–196 frames each. Each of the four USB observations contains 74 samples: all disarmed, no FC channel change. Private evidence: `work/fc-crsf-trial-*.json`. No continuous serial output remains.
+- Built/installed a private pinned pigpio library and prepared the finite direct-SBUS probe. Driver initialization passed (v79, GPIO14 ALT0). This check made no SBUS transmission or pin write. UART remained unowned; GPIO14/15 remained TXD0/RXD0. No pigpio daemon or output service runs. Nineteen host tests passed, including independent SBUS waveform decoding. See [SBUS bench procedure](SBUS-BENCH.md).
+- RX-loss beeper mute persisted on readback, but owner reported further noise. Battery status was OK at 21.99 V / 6S. Saved `beeper -ALL` and retained both motor-beacon disables; post-reboot readback confirms all FC buzzer events muted. Voltage thresholds and flight failsafe policy unchanged. The sound source if it persists is unresolved; ESC autonomous settings were not changed. See [restore instructions](FC-2026-SETUP.md#bench-buzzer-mute--2026-09-29).
+
+## LAN browser viewer — passed, 2026-09-29
+
+At the owner's request, enabled MediaMTX WebRTC and HLS listeners on the Pi using `config/mediamtx-lan.yml`. Existing configuration backed up first. Video publishing reconnected after the MediaMTX restart; both video services are active and enabled. RTSP remains loopback-only and LAN clients have read-only permissions on the two named stream paths.
+
+The laptop at 192.168.1.133 loaded both `http://192.168.1.104:8889/fpv1/` and `http://192.168.1.104:8888/fpv1/`. Browser screenshots visibly showed the live workshop camera picture and FC OSD. WebRTC logs confirm an established peer connection and H.264 reading; the HLS playlist returned HTTP 200 after following its session redirect. No extra video transcoder was added. Playback was verified, not end-to-end latency or WAN operation. See [LAN-VIEWER.md](LAN-VIEWER.md).
+
+Current muted-FC complete backup captured in `work/fc-bench-muted-backup-20260929T041655Z/` (39,565-byte dump, 3,266-byte diff, checksum manifest); closing save marker verified. CLI exited with USB closed.

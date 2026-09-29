@@ -49,3 +49,22 @@ Saved GPS Rescue hover throttle 1300, angle limit 60 degrees and throttle bounds
 All configuration commands were accepted, saved and read back after reboot. USB is closed and available to the configurator. No arm, RC override, motor test or Pi GPIO/UART RC output was sent.
 
 The initialized receiver exposes **18 channels**, but runtime RX rate is **0**, and **RXLOSS** remains. These channel values do not prove received SBUS frames. Next: verify a correctly timed, inverted SBUS source and electrical levels at the VRX's dedicated SBUS input; then calibrate HID channels and observe actual FC channel movement and loss response. Ordinary Pi TX/RX wiring alone is still not that interface.
+
+
+## Bench buzzer mute — 2026-09-29
+
+The owner reported painful repeated beeping. Initially `beeper -RX_LOST` was saved; both motor beacon triggers were already disabled. When beeping recurred, readback confirmed the earlier mute persisted and battery status was OK (21.99 V, 6S). Saved `beeper -ALL`, retaining `beacon -RX_LOST` and `beacon -RX_SET`. Readback after reboot confirms all Betaflight buzzer events and both beacon triggers disabled. This silences audible battery warnings too; the flight failsafe policy and voltage thresholds were not altered. An autonomous ESC buzzer, if present, is separate and has not been reconfigured.
+
+Restore the buzzer selection that existed immediately before the all-event bench mute with:
+
+```text
+beeper ALL
+beeper -RX_LOST
+save
+```
+
+Use `beeper ALL` plus `save` to restore all FC buzzer events, including RX loss. Leave motor beacon flags as separately intended. The earlier full configured backup predates this bench mute; current readback/evidence is in ignored `work/fc-bench-mute-*` and `work/fc-bench-mute-verify-*`. Restore intended audible warnings before flight evaluation.
+
+Four subsequent UART trial records contain no FC channel movement and no armed status; bounded Pi CRSF output has now been exercised. The former statement that no Pi serial frame had ever been transmitted describes the earlier setup checkpoint only. Actual SBUS reception and end-to-end control remain unverified.
+
+Complete current bench-muted dump/diff/status/beeper/beacon export with SHA-256 manifest: `work/fc-bench-muted-backup-20260929T041655Z/`. Full dump closing save section verified. CLI exited and USB handle closed.

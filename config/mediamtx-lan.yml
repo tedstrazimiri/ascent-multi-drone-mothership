@@ -1,0 +1,52 @@
+# Bench LAN viewer. Read-only video access for 192.168.1.0/24; publishing stays local.
+logLevel: info
+rtsp: yes
+rtspAddress: 127.0.0.1:8554
+rtspTransports: [tcp]
+rtmp: no
+hls: yes
+hlsAddress: :8888
+hlsVariant: lowLatency
+hlsAlwaysRemux: no
+webrtc: yes
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+webrtcIPsFromInterfaces: yes
+webrtcIPsFromInterfacesList: [wlan0, eth0]
+webrtcICEServers2: []
+srt: no
+moq: no
+api: no
+metrics: no
+pprof: no
+playback: no
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: [127.0.0.1, '::1']
+    permissions:
+      - action: publish
+        path: fpv1
+      - action: read
+        path: fpv1
+      - action: publish
+        path: fpv2
+      - action: read
+        path: fpv2
+  - user: any
+    pass:
+    ips: [192.168.1.0/24]
+    permissions:
+      - action: read
+        path: fpv1
+      - action: read
+        path: fpv2
+paths:
+  fpv1:
+    source: publisher
+    overridePublisher: no
+  fpv2:
+    source: publisher
+    overridePublisher: no

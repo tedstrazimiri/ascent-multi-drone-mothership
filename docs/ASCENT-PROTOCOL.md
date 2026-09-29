@@ -46,3 +46,8 @@ The owner confirms that Industry and standard Ascent VRX use the same hardware, 
 6. Whether this Industry board supports native UVC; exact USB formats/resolutions/rates if it does.
 
 No vendor messages or firmware changes have been made.
+
+
+## Physical bench update, 2026-09-29
+
+Owner reports exact UART mode `ELRS TT`. Four finite CRSF UART probes at 115200, 400000, 416666 and 420000 baud produced no FC SBUS channel movement; the FC stayed disarmed. These probes were RC-format experiments, not packets from the supplied management document. Actual UART-to-SBUS conversion remains unproven. A dedicated GPIO-generated SBUS input test is prepared and awaits wiring confirmation. See [SBUS-BENCH.md](SBUS-BENCH.md).

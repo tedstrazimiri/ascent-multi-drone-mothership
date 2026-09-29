@@ -28,7 +28,7 @@ def valid_channels(channels):
             and all(type(x) is int and 0 <= x <= 2047 for x in channels))
 
 def sbus_frame(channels, failsafe=False, lost=False):
-    """Encode bytes for offline analysis only; inversion/timing is a hardware concern."""
+    """Encode SBUS bytes; the caller supplies electrical inversion and timing."""
     if not valid_channels(channels):
         raise ValueError('need 16 integer channels in 0..2047')
     bits = sum(value << (11 * i) for i, value in enumerate(channels))
