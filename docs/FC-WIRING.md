@@ -37,19 +37,24 @@ The owner-reported harness connection is not an independent continuity or voltag
 
 MSP on the **Ports** page supports the VTX OSD connection. **MSP Receiver Mode** selects a different source of stick/channel data; it does not make an SBUS stream on RX2 into an MSP receiver. A real MSP-RC implementation would need actual MSP RC packets and a proven transport to the FC. The current relay does not provide that implementation.
 
-The latest read-only check, after the owner enabled UART2 Serial RX, returned:
+The latest read-only check, after the owner changed Receiver Mode to Serial, returned:
 
 - UART1 function mask 131073: MSP and VTX MSP enabled.
 - UART2 function mask 64: Serial RX enabled.
 - Stored serial receiver provider 2: SBUS.
-- RX_MSP feature enabled and RX_SERIAL disabled: **Receiver Mode still needs changing to Serial (via UART)** for the SBUS path.
+- RX_MSP disabled and RX_SERIAL enabled: **Receiver Mode is now correct for the SBUS path**.
+- MSP_RC returns zero channels. The firmware build-options query includes CRSF (4097) and omits SBUS (4103): **the installed firmware lacks the SBUS receiver driver**.
 
-No FC settings were written by the assistant. Private snapshots: `work/fc-after-owner-msp-change.json` (earlier, before UART2 was enabled) and `work/fc-current-serial-ports-v2.json` (latest).
+The driver issue is independent of wiring and RF reception. In Betaflight 4.5.1, compiled receiver drivers are reported by [MSP build information](https://github.com/betaflight/betaflight/blob/4.5.1/src/main/msp/msp_build_info.c); [option IDs](https://github.com/betaflight/betaflight/blob/4.5.1/src/main/msp/msp_build_info.h) distinguish CRSF and SBUS. The SBUS initializer sets its channel count before checking the serial port or receiving RF data. Choosing SBUS in configuration does not add its missing driver. Preserve the existing FC configuration before preparing an appropriate firmware build; no firmware change has been performed.
+
+No FC settings were written by the assistant. Private snapshots: `work/fc-after-owner-msp-change.json` (earlier), `work/fc-current-serial-ports-v2.json` (before Receiver Mode correction), `work/fc-serial-sbus-mode-verified.json` and `work/fc-build-options-verified.json` (latest). Installed build reports Jan 10 2025, 01:13:49, revision `77d01ba`, Betaflight 4.5.1.
 
 ## Remaining ground-side interface
 
 The manuals confirm a separate SBUS lead at the VTX/FC end. They do not establish conversion of arbitrary UART input at the VRX into SBUS output at the GT Pro. Selecting UART passthrough is a data-mode selection, not proof of such conversion. The earlier UART-mode recommendation must be read with this limit.
 
 For the planned SBUS route, provide a verified SBUS source to the VRX's SBUS input and observe the GT Pro output/FC channels. The Pi's current ordinary TX/RX wiring is not an SBUS source: standard SBUS requires inverted 100000-baud 8E2 and compatible electrical levels. The independent output interface, VRX voltage, passthrough behavior and loss response still need bench verification. No physical RC output has been enabled.
+
+The owner specifically reaffirmed the VRX's dedicated SBUS pin. Use it for this route rather than relying on undocumented UART-to-SBUS conversion. The Pi receives channel values over IP, so it must generate SBUS frames and the appropriate electrical waveform. `relay.protocol.sbus_frame` already packs frames offline; that is separate from a timed, inverted physical output. PL011 with a suitable inversion/interface stage or a suitable MCU can provide the latter. Merely moving the current Pi TX lead to the VRX SBUS pin is not a verified interface.
 
 Cached Industry guide SHA-256: `64167274f6f595dfe065efc33ec65954b29fc5b9eb838a0a6ed65d562e767eec`; GEPRC guide: `a1832f0a528179e1f295f907bd7aa035a539d87660b2226b1d99b793887f92bb`. Relevant diagrams were rendered and visually inspected.

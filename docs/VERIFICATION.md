@@ -92,3 +92,11 @@ The owner confirmed the FC is the GEPRC TAKER H7 used for this FPV, with the GT 
 After the owner selected MSP Receiver Mode, read-only USB queries confirmed RX_MSP enabled, RX_SERIAL disabled, stored serial provider SBUS and initially no serial RX port. The owner then enabled UART2 Serial RX. A later full-width MSP2 read verified UART1 mask 131073 (MSP + VTX MSP) and UART2 mask 64 (Serial RX), while Receiver Mode remained MSP. The owner was advised to change only Receiver Mode to Serial (via UART) for this SBUS route; SBUS was already selected. No FC settings were changed by the assistant. One intervening read could not start while USB was briefly absent; the successful later read is the current snapshot.
 
 The manual evidence does not prove that the VRX's UART input converts to the VTX's SBUS output. Ordinary Pi TX/RX wiring is still not a verified SBUS source. Physical output remains disabled pending the electrical/output-interface work and end-to-end loss tests. The inventory now records the owner-confirmed FC and connected GT Pro as in use for the project.
+
+## Serial Receiver Mode verified; missing SBUS firmware driver identified
+
+After the owner changed Receiver Mode, read-only MSP confirms RX_SERIAL enabled, RX_MSP disabled, provider 2 (SBUS), UART2 Serial RX and UART1 MSP + VTX MSP. MSP_RC returns an empty payload, meaning zero runtime RC channels; this is not a successful receiver initialization or RF test.
+
+A live MSP_BUILD_INFO query reports the installed build's serial receiver option as CRSF (4097), with no SBUS option (4103). Decoded against Betaflight 4.5.1's generated build-option table and conditional driver reporting. Its SBUS initializer normally sets the channel count before any valid input frame, so the missing compiled driver explains the zero-channel result. Firmware identity: Betaflight 4.5.1, Jan 10 2025 01:13:49, revision 77d01ba. No FC settings or firmware were changed by the assistant.
+
+Private evidence: `work/fc-serial-sbus-mode-verified.json` and `work/fc-build-options-verified.json`. Next: preserve the FC configuration and prepare firmware with SBUS included, alongside the Pi-to-VRX SBUS electrical interface. The owner reiterated the VRX's separate SBUS pin; this remains the intended input, avoiding any reliance on undocumented UART-to-SBUS conversion inside Ascent.
