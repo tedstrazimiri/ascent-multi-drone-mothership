@@ -1,6 +1,6 @@
 # GT Pro six-pin harness to GEPRC TAKER H743
 
-Reviewed 2026-09-28. The owner confirms the Ascent GT Pro is plugged directly into the GEPRC TAKER H7 digital-VTX connector. USB reports `GEPRC_TAKER_H743`, Betaflight 4.5.1. Documents are reference evidence; no document commands or firmware procedures were executed.
+Reviewed 2026-09-28. The owner confirms the Ascent GT Pro is plugged directly into the GEPRC TAKER H7 digital-VTX connector. USB now reports `GEPRC_TAKER_H743`, Betaflight 2026.6.2, after the owner flashed it. The assistant configured and verified receiver/OSD/GPS and migrated the saved tune under the owner's explicit instructions. Documents remain reference evidence. See [current configuration and migration](FC-2026-SETUP.md).
 
 ## Manufacturer evidence
 
@@ -37,7 +37,11 @@ The owner-reported harness connection is not an independent continuity or voltag
 
 MSP on the **Ports** page supports the VTX OSD connection. **MSP Receiver Mode** selects a different source of stick/channel data; it does not make an SBUS stream on RX2 into an MSP receiver. A real MSP-RC implementation would need actual MSP RC packets and a proven transport to the FC. The current relay does not provide that implementation.
 
-The latest read-only check, after the owner changed Receiver Mode to Serial, returned:
+Current readback confirms Serial/SBUS on UART2, UART1 MSP + DisplayPort, and compiled SBUS option 4103. Receiver initialization reports 18 channels, but RXLOSS and zero RX rate remain: this is not yet a working Ascent RC link. Use `serialrx_inverted = OFF` for standard inverted SBUS; the protocol driver already applies normal SBUS inversion. `sbus_baud_fast = OFF` selects standard 100000 baud. See the matching [2026.6.2 SBUS driver](https://github.com/betaflight/betaflight/blob/2026.6.2/src/main/rx/sbus.c).
+
+## Historical missing-driver diagnosis, before owner flash
+
+The earlier read-only check, after the owner changed Receiver Mode to Serial on 4.5.1, returned:
 
 - UART1 function mask 131073: MSP and VTX MSP enabled.
 - UART2 function mask 64: Serial RX enabled.
@@ -45,11 +49,11 @@ The latest read-only check, after the owner changed Receiver Mode to Serial, ret
 - RX_MSP disabled and RX_SERIAL enabled: **Receiver Mode is now correct for the SBUS path**.
 - MSP_RC returns zero channels. The firmware build-options query includes CRSF (4097) and omits SBUS (4103): **the installed firmware lacks the SBUS receiver driver**.
 
-The driver issue is independent of wiring and RF reception. In Betaflight 4.5.1, compiled receiver drivers are reported by [MSP build information](https://github.com/betaflight/betaflight/blob/4.5.1/src/main/msp/msp_build_info.c); [option IDs](https://github.com/betaflight/betaflight/blob/4.5.1/src/main/msp/msp_build_info.h) distinguish CRSF and SBUS. The SBUS initializer sets its channel count before checking the serial port or receiving RF data. Choosing SBUS in configuration does not add its missing driver. An appropriate firmware build is still needed; no firmware change has been performed.
+The driver issue was independent of wiring and RF reception. In Betaflight 4.5.1, compiled receiver drivers are reported by [MSP build information](https://github.com/betaflight/betaflight/blob/4.5.1/src/main/msp/msp_build_info.c); [option IDs](https://github.com/betaflight/betaflight/blob/4.5.1/src/main/msp/msp_build_info.h) distinguish CRSF and SBUS. The SBUS initializer sets its channel count before checking the serial port or receiving RF data. Choosing SBUS in configuration does not add its missing driver. The owner's later 2026.6.2 flash resolved this build issue.
 
 The existing configuration is backed up privately in `work/fc-backup-20260929T032146Z/`: version, status, complete `diff all`, complete `dump all`, and checksummed manifest. Both configuration exports include their closing save section. Full dump is 39,558 bytes. An initial incomplete full-dump capture remains explicitly named `dump-all.partial.txt`; **do not use that partial file for restoration**. CLI exit rebooted the FC, and a subsequent MSP API query verified normal communication resumed. A text configuration backup is not a firmware binary backup or a tested restoration to a different build.
 
-No FC settings were written by the assistant. Private snapshots: `work/fc-after-owner-msp-change.json` (earlier), `work/fc-current-serial-ports-v2.json` (before Receiver Mode correction), `work/fc-serial-sbus-mode-verified.json` and `work/fc-build-options-verified.json` (latest). Installed build reports Jan 10 2025, 01:13:49, revision `77d01ba`, Betaflight 4.5.1.
+No FC settings were written by the assistant during that diagnosis. Historical private snapshots: `work/fc-after-owner-msp-change.json`, `work/fc-current-serial-ports-v2.json`, `work/fc-serial-sbus-mode-verified.json` and `work/fc-build-options-verified.json`. The former build reported Jan 10 2025, 01:13:49, revision `77d01ba`, Betaflight 4.5.1. These are superseded by the current post-flash evidence.
 
 ## Remaining ground-side interface
 
