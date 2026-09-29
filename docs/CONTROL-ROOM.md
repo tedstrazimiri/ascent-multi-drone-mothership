@@ -71,3 +71,10 @@ At a console restart, verified indoor preparation is retained and checked agains
 ## Offline UI preview
 
 Run `python3 scripts/preview-console.py` and open <http://127.0.0.1:8768/> for layout and interaction checks without hardware. The banner and video pattern explicitly mark simulation. This standalone fixture imports no hardware/control/SSH modules; its actions only change in-memory sample data. It is not installed as a persistent service and does not alter saved production settings.
+
+
+## Video timing
+
+Open **Live → Video timing** with WebRTC selected. The panel shows decoded FPS, receive-buffer residence, browser decode time and media RTT. **Measure 30 seconds** records interval statistics while the tab stays visible; **Export JSON** saves the result. A failed HLS availability probe no longer closes WebRTC. A frozen or reconnecting player is visibly marked.
+
+**Minimum delay** requests a smaller browser buffer and can increase freezes on a variable link. It is a temporary comparison option; automatic is the default. These measurements exclude camera/RF/capture delay. Use the visual target for the complete path; instructions and observed results are in [the latency sprint](LATENCY-SPRINT-2026-09-29.md). Changing the saved Pi address reloads the console to apply its restricted video origin.

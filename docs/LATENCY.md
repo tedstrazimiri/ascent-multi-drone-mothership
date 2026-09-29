@@ -1,6 +1,6 @@
 # Latency audit — 2026-09-29
 
-**Deferred:** the owner requested a documentation closeout before further latency work. The findings below are preserved; proposed changes are not deployed or scheduled. Resume from [PROJECT-HANDOFF.md](PROJECT-HANDOFF.md) next session.
+**Historical audit, now followed by an active sprint:** see [current measurements and changes](LATENCY-SPRINT-2026-09-29.md). The findings below describe the earlier session; its capture-rate and control-protocol proposals remain unimplemented.
 
 ## Verified live
 

@@ -64,9 +64,10 @@ class FixtureHandler(BaseHTTPRequestHandler):
                     with self.lock:self.fixture['session']=copy.deepcopy(q)
             self.send(200,s)
         elif path=='/preview-feed':self.send(200,PATTERN,'text/html')
-        elif path in ('/','/style.css','/app.js'):
+        elif path in ('/','/style.css','/app.js','/video-player.js',
+                      '/vendor/mediamtx-reader.js','/latency-target.html','/latency-target.js'):
             self.send(200,(ROOT/'web'/('index.html' if path=='/' else path[1:])).read_text(),
-                      'text/html' if path=='/' else 'text/css' if path.endswith('css') else 'text/javascript')
+                      'text/html' if path=='/' or path.endswith('.html') else 'text/css' if path.endswith('css') else 'text/javascript')
         else:self.send(404,{'error':'Not found'})
     def do_POST(self):
         if self.headers.get('Origin')!=f'http://127.0.0.1:{self.server.server_port}' or self.headers.get('X-Console-Token')!='offline-preview':

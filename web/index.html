@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090e12"><title>ASCENT / Ground control</title><link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090e12"><title>ASCENT / Ground control</title><link rel="stylesheet" href="/style.css"><script defer src="/vendor/mediamtx-reader.js"></script><script defer src="/video-player.js"></script><script defer src="/app.js"></script></head>
 <body>
 <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
  <symbol id="i-live" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><circle cx="12" cy="12" r="4"/><path d="M12 5v3m0 8v3M5 12h3m8 0h3"/></symbol>
@@ -40,9 +40,19 @@
     <div class="video-stack">
      <article class="video-panel" aria-label="FPV 01 video">
       <div class="video-toolbar"><div class="feed-label"><span class="feed-number">01</span><strong>FPV CAM</strong><span id="feed-status" class="muted">CONNECTING</span></div><div class="video-actions"><span id="transport-label">HLS</span><button id="toggle-video" class="icon-button" title="Pause video" aria-label="Pause video" aria-pressed="true"><svg class="icon"><use href="#i-power"/></svg></button><button id="reload-video" class="icon-button" title="Reconnect video" aria-label="Reconnect video"><svg class="icon"><use href="#i-refresh"/></svg></button><button id="expand-video" class="icon-button" title="Expand video" aria-label="Expand video" aria-pressed="false"><svg class="icon"><use href="#i-expand"/></svg></button></div></div>
-      <div id="video-container" class="video-container"><div class="video-grid"></div><div class="video-placeholder" id="video-placeholder"><svg class="feed-reticle" viewBox="0 0 100 100" aria-hidden="true"><path d="M26 10H10v16m64-16h16v16M10 74v16h16m64-16v16H74"/><circle cx="50" cy="50" r="23"/><path d="M50 19v17m0 28v17M19 50h17m28 0h17"/><circle cx="50" cy="50" r="3"/></svg><strong id="video-placeholder-title">CONNECTING</strong><span id="video-placeholder-detail">FPV 01 / HDMI → IP</span></div><div id="video-frame"></div></div>
+      <div id="video-container" class="video-container"><div class="video-grid"></div><div class="video-placeholder" id="video-placeholder"><svg class="feed-reticle" viewBox="0 0 100 100" aria-hidden="true"><path d="M26 10H10v16m64-16h16v16M10 74v16h16m64-16v16H74"/><circle cx="50" cy="50" r="23"/><path d="M50 19v17m0 28v17M19 50h17m28 0h17"/><circle cx="50" cy="50" r="3"/></svg><strong id="video-placeholder-title">CONNECTING</strong><span id="video-placeholder-detail">FPV 01 / HDMI → IP</span></div><div id="video-frame"></div><span id="video-stall" class="video-stall" hidden>CONNECTING</span></div>
       <div class="video-foot"><span><i class="dot" id="source-dot"></i><span id="source-label">SOURCE UNAVAILABLE</span></span><span id="stream-config" title="Configured capture format; not a measured frame rate">1280 × 720 / 30 FPS</span><span id="stream-bitrate" title="Configured target bitrate; apply changes in Link settings">— Mbps</span></div>
      </article>
+     <details class="video-diagnostics" id="video-diagnostics">
+      <summary>VIDEO TIMING <span id="timing-status">WebRTC measurements</span></summary>
+      <div class="diagnostic-body">
+       <div class="timing-grid"><span>DECODED<strong id="timing-fps">—</strong></span><span>RECEIVE BUFFER<strong id="timing-buffer">—</strong></span><span>DECODE<strong id="timing-decode">—</strong></span><span>MEDIA RTT<strong id="timing-rtt">—</strong></span></div>
+       <div class="timing-controls"><label>PLAYOUT BUFFER<select id="buffer-mode"><option value="auto">Automatic</option><option value="minimum">Minimum delay</option></select></label><button id="measure-video" class="secondary">Measure 30 seconds</button><button id="export-video" class="secondary" disabled>Export JSON</button></div>
+       <p class="micro-note" id="timing-note">Receive-stage timing only. Camera, Ascent RF and capture delay require the visual timer test. Minimum delay requests a 0 ms target; the browser chooses the actual buffer.</p>
+       <output id="timing-summary">Keep this tab visible during measurements.</output>
+       <a class="text-button" href="/latency-target.html" target="_blank" rel="noopener">Open visual timing target ↗</a>
+      </div>
+     </details>
      <div class="telemetry-strip" aria-label="Flight controller telemetry">
       <div title="Actual flight controller state from USB"><svg class="icon"><use href="#i-shield"/></svg><span><small>FC STATE</small><strong id="fc-armed">—</strong></span></div>
       <div title="Battery reading from flight controller USB"><svg class="icon"><use href="#i-battery"/></svg><span><small>BATTERY</small><strong id="fc-battery">—</strong></span></div>

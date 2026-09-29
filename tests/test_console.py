@@ -135,6 +135,7 @@ class ConsoleBoundaryTests(unittest.TestCase):
     def test_http_mutations_require_local_origin_and_token(self):
         class FakeConsole:
             token = 'test-token'
+            settings = {'host': '192.168.8.175'}
             actions = []
             def snapshot(self):
                 return {'token': self.token}
@@ -156,6 +157,21 @@ class ConsoleBoundaryTests(unittest.TestCase):
                 self.assertEqual(response.status, expected)
                 response.read(); client.close()
             self.assertEqual(fake.actions, [('start', {})])
+            for path, kind in [('/video-player.js', 'javascript'),
+                               ('/latency-target.html', 'text/html'),
+                               ('/latency-target.js', 'javascript'),
+                               ('/vendor/mediamtx-reader.js', 'javascript')]:
+                client = http.client.HTTPConnection('127.0.0.1', port)
+                client.request('GET', path)
+                response = client.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertIn(kind, response.getheader('Content-Type'))
+                policy = response.getheader('Content-Security-Policy')
+                self.assertIn("connect-src 'self' http://192.168.8.175:8889;", policy)
+                self.assertNotIn("connect-src *", policy)
+                self.assertIn("script-src 'self';", policy)
+                self.assertTrue(response.read())
+                client.close()
             client = http.client.HTTPConnection('127.0.0.1', port)
             client.request('GET', '/api/state', headers={'Host': 'unrelated.example'})
             response = client.getresponse()

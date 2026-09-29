@@ -99,7 +99,7 @@ class Console:
         self.closing = threading.Event()
         self.stop_event = threading.Event()
         self.token = secrets.token_urlsafe(32)
-        self.settings = {'host': '192.168.8.175', 'transport': 'hls', 'seconds': 60, 'video_bitrate': 3}
+        self.settings = {'host': '192.168.8.175', 'transport': 'webrtc', 'seconds': 60, 'video_bitrate': 3}
         self.mapping = json.loads((ROOT / 'config/joystick-tx15-bench.json').read_text())
         if SETTINGS.exists():
             saved = json.loads(SETTINGS.read_text())
@@ -679,7 +679,9 @@ def handler_for(console, port):
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
-            self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src http:; connect-src 'self'; frame-ancestors 'none'")
+            # The selected, validated Pi is the only extra signaling destination.
+            video_host = getattr(console, 'settings', {}).get('host', '192.168.8.175')
+            self.send_header('Content-Security-Policy', f"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; frame-src http:; connect-src 'self' http://{video_host}:8889; frame-ancestors 'none'")
             self.end_headers()
             try:
                 self.wfile.write(body)
@@ -696,7 +698,8 @@ def handler_for(console, port):
             path = urlsplit(self.path).path
             if path == '/api/state':
                 self.send(200, console.snapshot())
-            elif path in ('/', '/app.js', '/style.css'):
+            elif path in ('/', '/app.js', '/style.css', '/video-player.js',
+                          '/vendor/mediamtx-reader.js', '/latency-target.html', '/latency-target.js'):
                 name = 'index.html' if path == '/' else path[1:]
                 self.send(200, (WEB / name).read_bytes(), mimetypes.guess_type(name)[0] or 'text/plain')
             else:

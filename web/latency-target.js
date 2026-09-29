@@ -1,0 +1,4 @@
+
+const start=performance.now();let last=null,frames=[];
+function tick(now){const elapsed=now-start;document.getElementById('clock').textContent=(elapsed/1000).toFixed(3).padStart(9,'0');document.getElementById('flash').style.background=Math.floor(elapsed/250)%2?'#fff':'#090e12';if(last!==null){frames.push(now-last);if(frames.length>120)frames.shift();}last=now;document.getElementById('cadence').textContent='Elapsed seconds · display updates about '+(frames.length?frames.reduce((a,b)=>a+b,0)/frames.length:0).toFixed(1)+' ms apart · no clock synchronization required';if(frames.length&&frames.reduce((a,b)=>a+b,0)/frames.length>50)document.getElementById('cadence').textContent+=' · SLOW UPDATES: keep this target foreground';requestAnimationFrame(tick);}requestAnimationFrame(tick);
+document.getElementById('fullscreen').onclick=()=>document.documentElement.requestFullscreen();

@@ -1,6 +1,8 @@
 # Project handoff — 2026-09-29
 
-**Status: paused at the owner's request.** Further latency measurements and changes are deferred to the next session. This closeout made documentation changes only: no control trial, FC setting change, relay deployment, service restart, reboot or hardware shutdown.
+**Status: latency sprint active (resumed 2026-09-29).** Read [current sprint measurements](LATENCY-SPRINT-2026-09-29.md) first. Pi/VRX video has been rechecked; TX15, FC and GT Pro/camera are off/disconnected for this sprint. The console now measures WebRTC receive timing and offers a reversible minimum-buffer trial. USB capture reconnects and Wi-Fi authentication failures currently prevent a stable full-path comparison. No physical RC output or FC setting change was performed.
+
+The Pi's attached text-monitor timer is prepared at `/home/ted/ascent-latency/latency-clock.py`. Next: establish stable capture/Wi-Fi, then point the powered FPV camera at the timer and record the original and dashboard image together. Automatic playout buffering remains selected; the minimum-delay trial froze frequently.
 
 This page is the current project summary. [VERIFICATION.md](VERIFICATION.md) preserves chronological evidence, including earlier failures and subsequently resolved blockers. “Verified” below means the stated test passed, not qualification for flight.
 
@@ -12,7 +14,7 @@ Implemented: HDMI video capture and browser playback, USB-HID TX15 calibration, 
 
 Not implemented: mothership flight/launch integration, suppression payload actuation, Starlink or other WAN backhaul, VPN deployment, remote bidirectional FC telemetry, integrated Mission Planner/Kite control, a separate hardware output watchdog, full piloting with ARM plus live sticks, or simultaneous operation of two FPVs. `fpv2` configuration and synthetic tests are scaffolding only.
 
-## Last observed state
+## Previous-session observed state
 
 Read from the local dashboard API at **2026-09-29 08:50 EDT** during documentation preparation. These are time-bound observations, not a promise that devices remain connected after the session.
 
@@ -226,7 +228,7 @@ The complete measured findings and proposed experiments are in [LATENCY.md](LATE
 - Per-snapshot challenge/response limits RC update cadence as RTT grows. Sampling happens after challenge receipt; do not describe a whole RTT as added age for every sampled joystick value.
 - Capture/encoder buffering, distinct 60 fps capability, direct HDMI baseline and total stick-to-FC delay remain unmeasured.
 
-**Next session starts with measurement:** confirm devices/current settings, compare direct VRX HDMI against dashboard WebRTC with the same timed visual stimulus, then measure input-to-FC separately. Record distributions and stalls, not just ping. After a baseline, evaluate bounded fresh-frame capture queues / 720p60, and a fixed-rate authenticated latest-input protocol that preserves freshness, anti-replay and stop behavior. Those are proposals, not installed improvements.
+**Measurement plan (now in progress; see current sprint above):** confirm devices/current settings, compare direct VRX HDMI against dashboard WebRTC with the same timed visual stimulus, then measure input-to-FC separately. Record distributions and stalls, not just ping. After a baseline, evaluate bounded fresh-frame capture queues / 720p60, and a fixed-rate authenticated latest-input protocol that preserves freshness, anti-replay and stop behavior. Those are proposals, not installed improvements.
 
 Later work remains electrical/interface documentation, Ascent RF-loss qualification, stable capture power/USB, private WAN/backhaul tests, flight failsafe/tune verification, and eventually a second independent link. Do not resume motor-beeper troubleshooting or change the working SBUS route merely because an older checkpoint says “pending.”
 

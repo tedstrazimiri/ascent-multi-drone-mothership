@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 let state = null, hydrated = false, currentPage = 'live', mode = 'arming';
 let videoEnabled = true, videoURL = '', noticeTimer, disconnected = false, pending = false;
+let videoPlayer = null, videoStats = null, playerStatus = 'CONNECTING', videoMeasurement = null, measurementTimer = null;
 let renderedLogs = '', renderedMapping = '', primaryActionsVisible = true;
 function updateGlobalStop() {$('global-stop').hidden = !state?.session.active || (currentPage === 'live' && primaryActionsVisible);}
 new IntersectionObserver(([entry]) => {primaryActionsVisible = entry.isIntersecting && entry.intersectionRatio > .8;updateGlobalStop();},{threshold:[0,.8,1]}).observe(document.querySelector('.test-actions'));
@@ -63,7 +64,7 @@ function moveStick(prefix,x,y) {
 function status(id,ok,title) {$(id).classList.toggle('ok',!!ok);if(title)$(id).title=title;}
 function fmt(v,n=1) {return Number.isFinite(v)?v.toFixed(n):'—';}
 function settingsFromForm() {return {host:$('host-input').value.trim(),transport:$('transport-input').value,seconds:Number($('duration-input').value),video_bitrate:Number($('bitrate-input').value)};}
-async function saveSettings(show=true) {await api('settings',settingsFromForm());if(show)notice('Saved');}
+async function saveSettings(show=true) {const settings=settingsFromForm(),hostChanged=settings.host!==state.settings.host;await api('settings',settings);if(show)notice('Saved');if(hostChanged)location.reload();}
 function mappingRow(label,value) {const row=document.createElement('div');row.className='mapping-row';const a=document.createElement('span'),b=document.createElement('span');a.textContent=label;b.textContent=value;row.append(a,b);return row;}
 function guidance(s,selectedMode,ready) {
  const q=s.session, h=s.hid;
@@ -163,14 +164,76 @@ function syncVideo(s,force=false) {
  const available=source.available&&fresh&&!disconnected;
  setText('transport-label',s.settings.transport.toUpperCase());setText('stream-bitrate',s.settings.video_bitrate+' Mbps');
  $('toggle-video').setAttribute('aria-pressed',String(videoEnabled));$('toggle-video').setAttribute('aria-label',videoEnabled?'Pause video':'Play video');$('toggle-video').title=videoEnabled?'Pause video':'Play video';
- setText('feed-status',videoEnabled?(available?'SOURCE ONLINE':'SOURCE OFFLINE'):'PAUSED');
+ setText('feed-status',videoEnabled?(videoPlayer?playerStatus:available?'SOURCE ONLINE':'SOURCE OFFLINE'):'PAUSED');
  setText('source-label',available?'STREAM AVAILABLE':source.updated?'SOURCE UNAVAILABLE':'CHECKING SOURCE');$('source-dot').classList.toggle('ok',!!available);
  setText('video-placeholder-title',!videoEnabled?'VIDEO PAUSED':disconnected?'CONSOLE OFFLINE':source.updated?'NO VIDEO LINK':'CONNECTING');
  setText('video-placeholder-detail',!videoEnabled?'PRESS POWER TO RESUME':s.settings.host+' / FPV 01');
- const url=videoEnabled&&available&&currentPage==='live'?(s.preview?'/preview-feed':`http://${s.settings.host}:${s.settings.transport==='hls'?8888:8889}/fpv1/`):'';
- if(url!==videoURL||force){videoURL=url;$('video-frame').replaceChildren();if(url){const frame=document.createElement('iframe');frame.title='FPV 01 video player';frame.src=url;frame.allow='autoplay; fullscreen';$('video-frame').append(frame);}}
+ // WebRTC owns its connection lifecycle. A failed HLS probe must not tear down healthy video.
+ const canPlay=!disconnected&&(s.settings.transport==='webrtc'||available);
+ const url=videoEnabled&&canPlay&&currentPage==='live'?(s.preview?'/preview-feed':`http://${s.settings.host}:${s.settings.transport==='hls'?8888:8889}/fpv1/`):'';
+ if(url!==videoURL||force){
+  if(videoMeasurement?.running)finishVideoMeasurement('Interrupted: player changed or source became unavailable');
+  videoPlayer?.close();videoPlayer=null;videoStats=null;playerStatus='CONNECTING';videoURL=url;$('video-frame').replaceChildren();
+  for(const id of ['timing-fps','timing-buffer','timing-decode','timing-rtt'])setText(id,'—');
+  setText('stream-config','1280 × 720 / configured 30 FPS');$('stream-config').title='Configured capture format; not a measured frame rate';
+  if(url){
+   if(!s.preview&&s.settings.transport==='webrtc')videoPlayer=new AscentVideoPlayer($('video-frame'),url+'whep',{
+    mode:$('buffer-mode').value,onSample:sample=>updateVideoStats(sample),
+    onStatus:(status,detail)=>{playerStatus=status;$('feed-status').title=detail||status;if(status==='RECONNECTING'){videoStats=null;for(const id of ['timing-fps','timing-buffer','timing-decode','timing-rtt'])setText(id,'—');setText('stream-config','Waiting for decoded frames');finishVideoMeasurement('Interrupted: WebRTC disconnected');}}
+   });
+   else{const frame=document.createElement('iframe');frame.title='FPV 01 video player';frame.src=url;frame.allow='autoplay; fullscreen';$('video-frame').append(frame);}
+  }
+ }
+ $('measure-video').disabled=!videoPlayer||!videoStats||videoMeasurement?.running;
+ $('buffer-mode').disabled=!videoPlayer||videoMeasurement?.running;
+ setText('timing-status',videoPlayer?(videoStats?'Receiving · '+(videoStats.protocol||'transport unknown').toUpperCase():playerStatus):'Select WebRTC for measurements');
  $('video-placeholder').hidden=!!url;
+ $('video-stall').hidden=!videoPlayer||playerStatus==='PLAYING';setText('video-stall',playerStatus);
 }
+function updateVideoStats(sample) {
+ videoStats=sample;
+ setText('timing-fps',fmt(sample.fps)+' fps');setText('timing-buffer',fmt(sample.buffer_ms)+' ms');
+ setText('timing-decode',fmt(sample.decode_ms)+' ms');setText('timing-rtt',fmt(sample.rtt_ms)+' ms');
+ if(sample.width&&sample.height)setText('stream-config',`${sample.width} × ${sample.height} / ${fmt(sample.fps)} FPS`);
+ $('stream-config').title='Decoded frame rate over the last sampling interval';
+ $('buffer-mode').title=sample.target_supported?'Browser supports requested buffer target':'Buffer target unsupported; browser automatic behavior';
+ if(videoMeasurement?.running){
+  videoMeasurement.samples.push(sample);
+  setText('timing-summary',`Recording · ${Math.min(30,Math.floor((performance.now()-videoMeasurement.start)/1000))} / 30 seconds`);
+ }
+}
+function finishVideoMeasurement(reason='Complete') {
+ clearTimeout(measurementTimer);
+ if(!videoMeasurement?.running)return;
+ videoMeasurement.running=false;videoMeasurement.result=reason;
+ videoMeasurement.summary=AscentVideoStats.summarize(videoMeasurement.samples);
+ videoMeasurement.elapsed_seconds=(performance.now()-videoMeasurement.start)/1000;
+ const q=videoMeasurement.summary;
+ const percentile=(key,p)=>fmt(q[key]?.[p]);
+ setText('timing-summary',`${reason} · ${q.samples} samples / ${fmt(q.seconds)} s
+Receive buffer median / p95: ${percentile('buffer_ms','median')} / ${percentile('buffer_ms','p95')} ms (${q.buffer_ms?.count??0} intervals with emitted frames)
+Decode median: ${percentile('decode_ms','median')} ms · decoded FPS median: ${percentile('fps','median')}
+Freezes: ${q.freezes??'unknown'} · dropped frames: ${q.dropped??'unknown'} · net packets lost: ${q.lost??'unknown'}
+These are receive-stage interval statistics, not camera-to-screen delay.`);
+ $('export-video').disabled=false;
+}
+$('buffer-mode').onchange=()=>{if(state)syncVideo(state,true);};
+$('measure-video').onclick=()=>{
+ if(!videoPlayer||!videoStats||videoMeasurement?.running)return;
+ videoMeasurement={running:true,start:performance.now(),started:new Date().toISOString(),samples:[],host:state.settings.host,buffer_mode:$('buffer-mode').value,
+  caveat:'Browser receive-stage interval statistics. Excludes camera, RF, capture and encoding. Percentiles summarize roughly one-second averages; not individual frame latency.',user_agent:navigator.userAgent};
+ videoPlayer.previous=null; // Begin with a fresh counter baseline inside this measurement window.
+ $('export-video').disabled=true;setText('timing-summary','Recording · keep this tab visible');
+ measurementTimer=setTimeout(()=>finishVideoMeasurement(),30000);
+};
+$('export-video').onclick=()=>{
+ if(!videoMeasurement||videoMeasurement.running)return;
+ const {start,running,...report}=videoMeasurement;
+ const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)+'\n'],{type:'application/json'}));
+ const link=document.createElement('a');link.href=url;link.download='ascent-video-'+report.started.replaceAll(':','-')+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&videoMeasurement?.running)finishVideoMeasurement('Interrupted: tab hidden');});
+window.addEventListener('pagehide',()=>videoPlayer?.close());
 async function poll() {
  try {
   const r=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(2000)});if(!r.ok)throw Error('Console unavailable');
