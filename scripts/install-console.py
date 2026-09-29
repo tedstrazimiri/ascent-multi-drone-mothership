@@ -37,4 +37,3 @@ Categories=Utility;Engineering;
 subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
 subprocess.run(['systemctl', '--user', 'start', 'ascent-console.service'], check=True)
 print('Installed Ascent Control Room launcher. Local console: http://127.0.0.1:8767')
-
