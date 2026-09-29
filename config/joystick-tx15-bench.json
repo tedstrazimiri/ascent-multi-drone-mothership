@@ -1,0 +1,10 @@
+{
+  "note": "Calibrated 2026-09-29 on TX15 reference requested by the owner; USB OpenTX TX15. AETR axes 0/1/2/3. SA position 3 is axis 5 high and is the owner's intended ARM control. In this bench mapping SA only enables stick transport; all AUX, including ARM AUX1, remain low. Switch off stops the run and requires explicit restart.",
+  "axes": [
+    {"index": 0, "min": -32767, "max": 32767, "invert": false},
+    {"index": 1, "min": -32767, "max": 32767, "invert": false},
+    {"index": 2, "min": -32767, "max": 32767, "invert": false},
+    {"index": 3, "min": -32767, "max": 32767, "invert": false}
+  ],
+  "deadman_axis": {"index": 5, "min": 16000, "max": 32767}
+}

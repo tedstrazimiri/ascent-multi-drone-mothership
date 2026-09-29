@@ -1,3 +1,5 @@
+> Current interactive workflow: [Ascent Control Room](CONTROL-ROOM.md). TX15 is the reference radio; the live HID path and owner-operated two-second SA arming test have now passed. Older steps below record staged bring-up. Current Pi field address: 192.168.8.175.
+
 # Bench bring-up
 
 ## First boot
@@ -14,7 +16,7 @@ First boot passed on 2026-09-28: `ssh ascent-pi` works, observed Wi-Fi address `
 
 **Current saved configuration (2026-09-28):** the running Pi now uses the MacroSilicon USB capture adapter (`534d:2109`) at `/dev/v4l/by-id/usb-MACROSILICON_USB_Video-video-index0`, MJPEG 1280×720 at 30 fps, and `h264_v4l2m2m` at a requested 3 Mbit/s. The reusable profile is [video-macrosilicon-720p30.json](../config/video-macrosilicon-720p30.json); it has been applied to `/etc/ascent-relay/video-fpv1.json`. The previous synthetic configuration remains backed up as `/etc/ascent-relay/video-fpv1.json.before-hdmi-20260928T225427Z`. Generic image defaults remain synthetic.
 
-On 2026-09-29, after the owner returned the VRX HDMI cable from the monitor to the capture card, the laptop received the live GT Pro camera picture and Betaflight OSD through the Pi RTSP path. The owner confirms `ELRS TT` and shared VRX/Pi ground. Four finite CRSF UART probes produced no FC channel movement. The next test is the dedicated SBUS input; see [current bench procedure](SBUS-BENCH.md). No persistent RC output is enabled.
+On 2026-09-29, after the owner returned the VRX HDMI cable from the monitor to the capture card, the laptop received the live GT Pro camera picture and Betaflight OSD through the Pi RTSP path. The owner confirms `ELRS TT` and shared VRX/Pi ground. Four finite CRSF UART probes produced no FC channel movement. The dedicated SBUS input subsequently passed a finite disarmed channel test; see [current bench procedure](SBUS-BENCH.md). No persistent RC output is enabled.
 
 Changing the USB cable resolved capture enumeration. Initial capture frames were plain colour bars; later frames showed the VRX interface. If colour bars recur, check HDMI input/output connections and the receiver's HDMI mode. The standard Ascent VRX manual specifies holding **BACK for 8 seconds** to restore 720p60 HDMI output. This changes HDMI timing; it is not the LINK/firmware-upgrade action. [Manufacturer manual](https://cdn.shopify.com/s/files/1/0036/3921/4169/files/Ascent_VRX_User_manual_V1.0.pdf?v=1769739026).
 
@@ -108,7 +110,21 @@ The FC's SBUS firmware, configuration and saved-tune migration are complete; see
 
 The owner subsequently connected the VRX SBUS lead to **physical header pin 8 / BCM GPIO14**. Live Pi readback still shows ALT0 TXD0, idle high, with no UART user. Requested signal-lead disconnection and a VRX-side SBUS-to-GND voltage measurement before a direct-drive test. No transmission or pin-mode change was made. Ordinary PL011 UART needs an inverter for standard SBUS; an alternative using pigpio hardware-timed GPIO waveforms could generate inversion directly, but has not been implemented or tested here. The current Pi image has no pigpio daemon installed or package candidate; its Python client alone is insufficient. [Upstream waveform support](https://github.com/joan2937/pigpio). Neither an external inverter nor direct GPIO signalling has yet been qualified electrically against this VRX.
 
-**Latest owner wiring update:** pin 8 / GPIO14 is back to **Pi UART TX → Ascent RX**, replacing the temporary SBUS-pin connection. That is the UART signal direction, not a verified SBUS source or evidence that Ascent converts UART input to SBUS output. No control output is enabled; voltage and the dedicated SBUS input/interface remain unresolved.
+**Earlier owner wiring update (superseded below):** pin 8 / GPIO14 is back to **Pi UART TX → Ascent RX**, replacing the temporary SBUS-pin connection. That is the UART signal direction, not a verified SBUS source or evidence that Ascent converts UART input to SBUS output. No control output is enabled; voltage and the dedicated SBUS input/interface remain unresolved.
 
 
-**2026-09-29 update:** The owner explicitly declined voltage measurement; electrical compatibility remains unverified and must not be represented as measured. Common VRX/Pi ground is owner-confirmed. The source-built private pigpio library and finite SBUS probe supersede the earlier statement that no GPIO implementation exists. Current wiring remains pin 8 → VRX RX until the owner confirms the move to VRX SBUS. See [SBUS-BENCH.md](SBUS-BENCH.md).
+**2026-09-29 update:** The owner explicitly declined voltage measurement; electrical compatibility remains unverified and must not be represented as measured. Common VRX/Pi ground is owner-confirmed. The source-built private pigpio library and finite SBUS probe supersede the earlier statement that no GPIO implementation exists. That preparation initially left pin 8 → VRX RX; the owner subsequently confirmed the move to VRX SBUS and the test passed as recorded below. See [SBUS-BENCH.md](SBUS-BENCH.md).
+
+## Superseding bench checkpoint — direct SBUS works
+
+Pi pin 8 / GPIO14 → VRX SBUS → GT Pro → FC UART2 successfully transported a four-second synthetic control trial. All 74 USB observations remained disarmed; FC roll alternated 1390/1610 and returned to loss values after the source stopped. GPIO14 was left input/pull-down. This supersedes the earlier zero-RX and unimplemented-SBUS checkpoints above. Voltage measurement was explicitly declined; no electrical qualification is claimed.
+
+HID AETR axes are calibrated as 0/1/2/3 with endpoints ±32767; SA position 3 is axis 5 high. The owner intends this as ARM AUX1. The new finite `relay.sbus_bench` and `config/joystick-tx15-bench.json` currently keep AUX1 and every other AUX low for live stick testing. They are prepared locally, not yet deployed or physically network-tested. Pi Wi-Fi became highly delayed and SSH commands stalled; restore responsive access via Ethernet before continuing. See [current SBUS procedure](SBUS-BENCH.md).
+
+The owner-requested Li-ion minimum is saved at 3.20 V/cell for active battery profile 0; warning remains 3.50 V/cell. FC beepers and motor beacon triggers remain muted. Motor noise stopped and later recurred; no ESC settings were written. Latest read-only FC check was disarmed, 21.70 V / 6S. The owner was advised to disconnect the flight battery for immediate silence, leaving FC USB connected; physical disconnection has not been confirmed.
+
+### Access restored using the Alfa adapter
+
+Ethernet is unavailable. Pi inspection showed onboard wlan0 at .104 active, with Alfa wlan1 disconnected. Activated Alfa with the existing Wi-Fi credentials kept private; new DHCP address .105, preferred route metric500, power save off and autoconnect enabled. Onboard remains fallback metric600. The new SBUS receiver is deployed and hash-verified; a four-second LAN synthetic test passed 200/200 packets, corresponding FC roll movement, all116 samples disarmed and receiver loss shutdown. Earlier pending-deployment/access statements are superseded. Live joystick and simultaneous-video verification remain next. See [current SBUS result](SBUS-BENCH.md).
+
+Latest: one HLS viewer through Alfa .105 was restored and a simultaneous4-second synthetic RC test passed200/200 packets, all116 FC samples disarmed and loss shutdown observed. The100-second HID window sent0 packets because throttle remained near centre and SA low; wait for owner throttle-down/SA-high readiness before repeating it. GPIO14 parked input/pull-down; no RC process running, video active. See the latest [verification](VERIFICATION.md).

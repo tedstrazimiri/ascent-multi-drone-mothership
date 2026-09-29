@@ -38,20 +38,36 @@ class Joystick:
             if axis['invert']:
                 fraction = 1 - fraction
             channels[i] = round(172 + max(0, min(1, fraction)) * 1639)
-        return channels, self.buttons.get(mapping['deadman_button'], False)
+        if 'deadman_axis' in mapping:
+            gate = mapping['deadman_axis']
+            value = self.axes.get(gate['index'])
+            enabled = value is not None and gate['min'] <= value <= gate['max']
+        else:
+            enabled = self.buttons.get(mapping['deadman_button'], False)
+        return channels, enabled
 
 def validate_mapping(mapping):
     axes = mapping.get('axes')
     if type(axes) is not list or len(axes) != 4:
         raise ValueError('bench requires exactly four calibrated axes')
     for a in axes:
-        if (not all(type(a.get(k)) is int for k in ('index', 'min', 'max'))
+        if (type(a) is not dict or not all(type(a.get(k)) is int for k in ('index', 'min', 'max'))
                 or not 0 <= a['index'] <= 255 or not -32768 <= a['min'] < a['max'] <= 32767
                 or type(a.get('invert')) is not bool):
             raise ValueError('invalid axis calibration')
     if len({a['index'] for a in axes}) != 4:
         raise ValueError('axes must be distinct')
-    if type(mapping.get('deadman_button')) is not int or not 0 <= mapping['deadman_button'] <= 255:
+    if ('deadman_button' in mapping) == ('deadman_axis' in mapping):
+        raise ValueError('choose exactly one enable button or axis')
+    if 'deadman_axis' in mapping:
+        gate = mapping['deadman_axis']
+        if (type(gate) is not dict
+                or not all(type(gate.get(k)) is int for k in ('index', 'min', 'max'))
+                or not 0 <= gate['index'] <= 255
+                or not -32768 <= gate['min'] < gate['max'] <= 32767
+                or gate['index'] in {a['index'] for a in axes}):
+            raise ValueError('invalid enable axis or range')
+    elif type(mapping['deadman_button']) is not int or not 0 <= mapping['deadman_button'] <= 255:
         raise ValueError('invalid deadman button')
 
 def main():

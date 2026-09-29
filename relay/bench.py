@@ -65,7 +65,20 @@ def sender(args, key):
             until = time.monotonic() + args.seconds
             next_poll = time.monotonic()
             sent = 0
+            waiting_logged = False
             while time.monotonic() < until:
+                if joystick and sent == 0:
+                    try:
+                        initial, enabled = joystick.snapshot(mapping)
+                    except KeyError:
+                        time.sleep(.02)
+                        continue
+                    if not enabled or initial[2] > 210:
+                        if not waiting_logged:
+                            log(state='waiting_for_enable_and_low_throttle', all_aux=172)
+                            waiting_logged = True
+                        time.sleep(.02)
+                        continue
                 sock.send(encode({'type': 'hello', 'drone': args.drone}, key))
                 try:
                     challenge = decode(sock.recv(2049), key)
@@ -80,12 +93,17 @@ def sender(args, key):
                         channels, deadman = joystick.snapshot(mapping)
                     except KeyError:
                         continue  # Await initial axis reports; send no uninitialised controls.
+                    if sent == 0 and (not deadman or channels[2] > 210):
+                        continue  # Recheck after the network round trip.
                 else:
                     channels = [992, 992, 172, 992] + [172] * 12
                     channels[0] = 992 + round(100 * math.sin(time.monotonic()))
                     deadman = True
                 sock.send(encode({**challenge, 'type': 'control', 'channels': channels, 'deadman': deadman}, key))
                 sent += 1
+                if not deadman:
+                    log(state='enable_released', action='sender stopped; restart required')
+                    break
                 next_poll = max(next_poll + .02, time.monotonic())
                 time.sleep(max(0, next_poll - time.monotonic()))
             log(state='sender_stopped', sent=sent, source='joystick' if joystick else 'synthetic')

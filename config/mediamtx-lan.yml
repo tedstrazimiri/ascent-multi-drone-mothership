@@ -13,7 +13,7 @@ webrtcAddress: :8889
 webrtcLocalUDPAddress: :8189
 webrtcLocalTCPAddress: :8189
 webrtcIPsFromInterfaces: yes
-webrtcIPsFromInterfacesList: [wlan0, eth0]
+webrtcIPsFromInterfacesList: [wlan0, wlan1, eth0]
 webrtcICEServers2: []
 srt: no
 moq: no
@@ -37,7 +37,7 @@ authInternalUsers:
         path: fpv2
   - user: any
     pass:
-    ips: [192.168.1.0/24]
+    ips: [192.168.1.0/24, 192.168.8.0/24]
     permissions:
       - action: read
         path: fpv1

@@ -65,6 +65,29 @@ save
 
 Use `beeper ALL` plus `save` to restore all FC buzzer events, including RX loss. Leave motor beacon flags as separately intended. The earlier full configured backup predates this bench mute; current readback/evidence is in ignored `work/fc-bench-mute-*` and `work/fc-bench-mute-verify-*`. Restore intended audible warnings before flight evaluation.
 
-Four subsequent UART trial records contain no FC channel movement and no armed status; bounded Pi CRSF output has now been exercised. The former statement that no Pi serial frame had ever been transmitted describes the earlier setup checkpoint only. Actual SBUS reception and end-to-end control remain unverified.
+Four subsequent UART trial records contain no FC channel movement and no armed status; bounded Pi CRSF output has now been exercised. The former statement that no Pi serial frame had ever been transmitted describes the earlier setup checkpoint only. This UART result is superseded for the dedicated SBUS route by the successful test below; live HID/IP operation remains pending.
 
 Complete current bench-muted dump/diff/status/beeper/beacon export with SHA-256 manifest: `work/fc-bench-muted-backup-20260929T041655Z/`. Full dump closing save section verified. CLI exited and USB handle closed.
+
+## Direct SBUS reception and Li-ion minimum — 2026-09-29
+
+The dedicated VRX SBUS input now works: Pi GPIO14 generated 195 inverted 100000-baud 8E2 frames over four seconds. FC USB readback followed alternating roll 1390/1610 with pitch/yaw 1500, throttle/AUX 987. All 74 status observations stayed disarmed. After the source stopped, FC channels returned to loss values including throttle 885. No actual arm or motor-output test was run. Evidence: `work/fc-sbus-trial-20260929T042729Z.json`.
+
+At the owner's request for the connected Li-ion pack, saved `vbat_min_cell_voltage = 320` in active battery profile 0. Rebooted readback confirms 3.20 V/cell minimum and unchanged `vbat_warning_cell_voltage = 350` (3.50 V/cell). This is an alert/failsafe configuration value, not an ESC cutoff adjustment. Other battery profiles were not changed. Private accepted/readback files: `work/fc-lion-minimum-20260929T042859Z/` and `work/fc-lion-minimum-verify-20260929T042927Z/`. The complete muted backup above predates this voltage change.
+
+The owner identified recurring noise as coming from the motors. Read-only ESC identification through FC passthrough returned general errors before any ESC settings could be read; no erase or setting write was sent. The owner reported the noise stopped and asked to skip that investigation. It subsequently recurred; the latest read-only FC check was disarmed with 21.70 V / 6S (about 3.62 V/cell). Immediate flight-battery disconnection was advised; disconnection is not yet confirmed. Cause remains unresolved, with FC beeper and motor-beacon mutes retained.
+
+SA position 3/high is the owner's intended ARM switch, identified on HID axis 5. FC ARM mode remains AUX1 high (1700–2100). Current bench transport clamps AUX1 low, so moving SA does not yet arm through the relay.
+
+
+## TX15 dashboard and indoor SA test — latest checkpoint
+
+The subsequent live HID run accepted1,803 snapshots and recorded1,689 disarmed FC samples, with all four primary channels traversing987–2011; SA release stopped output. Evidence `work/fc-network-sbus-20260929T045937Z.json`. This supersedes earlier HID-pending statements. Ordered direction checks can now be repeated using the self-paced graphical calibration.
+
+The field router now carries laptop192.168.8.130 and Pi192.168.8.175 on SSIDbbbb. The dashboard at http://127.0.0.1:8767/ is the normal setup/test workflow. Its latest disarmed link trial accepted200/200 frames,41 FC samples disarmed, roll1437–1553, and no arming blockers during reception (`work/console/trial-20260929T014706.json`).
+
+Owner requested a GUI arming button and indoor operation without GPS fix. Explicit preparation writes only RAM: GPS Rescue allowArmingWithoutFix=ON (MSP225), then failsafe DROP (MSP76). Both read back, and the GPS arming blocker cleared. No EEPROM-write command is used. Original payloads are in ignored private `work/console/fc-failsafe-before-arm.json`; Restore reapplies them over USB. A full FC power-cycle reloads saved settings too. The temporary profile remains active for repeated tests until restore/power-cycle; prepare again afterward. GPS hardware itself remains enabled.
+
+The separate arming receiver accepts centred roll/pitch/yaw, minimum throttle and AUX1 only; low ARM must precede high, accepted-control loss250ms latches stop, high lasts at most approximately2s plus scheduling, and10 low-ARM frames are sent at exit. An initial five-frame run stopped on timeout before ARM-high. The next run accepted152 frames including ARM-high, then10 disarm frames. With FC USB unplugged, the owner confirmed motors started and stopped automatically. Evidence `work/console/trial-20260929T014903.json`. Actual arming is owner-observed; no USB armed-state trace exists for that run. Flight control and full failsafe qualification remain out of scope of this test.
+
+See [Control Room instructions](CONTROL-ROOM.md). Normal stick tests continue to hold every AUX low; only the explicit separate SA arming test permits ARM-high.
